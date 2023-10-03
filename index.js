@@ -48,7 +48,7 @@ async function run() {
       if (user?.role !== "sadmin") {
         return res
           .status(403)
-          .send({ error: true, message: "forbidden message" });
+          .send({ error: true, message: "You are not Super Admin" });
       }
       next();
     };
@@ -60,17 +60,29 @@ async function run() {
       if (user?.role !== "admin") {
         return res
           .status(403)
-          .send({ error: true, message: "forbidden message" });
+          .send({ error: true, message: "You are not an Admin" });
       }
       next();
     };
 
-    const verifyInstructor = async (req, res, next) => {
+    const verifySuperAdminOrAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await users.findOne(query);
+      if (user?.role !== "sadmin" && user?.role !== "admin") {
+        return res
+          .status(403)
+          .send({ error: true, message: "You are nor Admin or Super Admin" });
+      }
+      next();
+    };
+
+    const verifyCoach = async (req, res, next) => {
       const email = req.decoded.email;
       const query = { email: email };
 
       const user = await users.findOne(query);
-      if (user?.role !== "instructor") {
+      if (user?.role !== "coach") {
         return res
           .status(403)
           .send({ error: true, message: "forbidden message" });
@@ -81,7 +93,7 @@ async function run() {
     // TODO: verify instructor remains
     // users
     // Get all users
-    app.get("/users", verifyJWT, verifySuperAdmin, async (req, res) => {
+    app.get("/users", verifyJWT, verifySuperAdminOrAdmin, async (req, res) => {
       try {
         const cursor = users.find();
         const result = await cursor.toArray();
@@ -95,21 +107,26 @@ async function run() {
     });
 
     // Get users by role
-    app.get("/users/byRole", verifyJWT, verifySuperAdmin, async (req, res) => {
-      try {
-        const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
+    app.get(
+      "/users/byRole",
+      verifyJWT,
+      verifySuperAdminOrAdmin,
+      async (req, res) => {
+        try {
+          const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
 
-        const cursor = users.find({ role: roleToFind });
-        const result = await cursor.toArray();
+          const cursor = users.find({ role: roleToFind });
+          const result = await cursor.toArray();
 
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching users by role:", error);
-        res
-          .status(500)
-          .send({ error: "An error occurred while fetching users by role." });
+          res.send(result);
+        } catch (error) {
+          console.error("Error fetching users by role:", error);
+          res
+            .status(500)
+            .send({ error: "An error occurred while fetching users by role." });
+        }
       }
-    });
+    );
 
     app.get("/users/:userEmail", async (req, res) => {
       const email = req.params.userEmail;
