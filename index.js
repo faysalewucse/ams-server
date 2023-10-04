@@ -181,6 +181,15 @@ async function run() {
       }
     );
 
+    //Teams
+    const teams = database.collection("teams");
+
+    // add teams to db
+    app.post("/teams", async (req, res) => {
+      const data = req.body;
+      console.log(data);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
