@@ -165,6 +165,18 @@ async function run() {
       }
     );
 
+    // Approve Admin by super admin
+    app.patch("/user/:id", verifyJWT, verifySuperAdmin, async (req, res) => {
+      const id = req.params.id;
+      const updatedStatus = req.query.status;
+      console.log(id, updatedStatus);
+      const result = await users.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: updatedStatus } }
+      );
+      res.send(result);
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
