@@ -128,6 +128,13 @@ async function run() {
       }
     );
 
+    // get athlete for coach
+    // app.get("/users/athlete", verifyJWT, verifySuperAdminOrAdmin, verifyCoach, async (req, res) => {
+    //   const query = req.query.role;
+    //   const result = await users.find({ role: query }).toArray();
+    //   res.send(result);
+    // });
+
     app.get("/users/:userEmail", async (req, res) => {
       const email = req.params.userEmail;
       const result = await users.findOne({ email: email });
@@ -165,7 +172,7 @@ async function run() {
       }
     );
 
-    // Approve Admin by super admin
+    // Update admin status by super admin
     app.patch(
       "/user/:id",
       verifyJWT,
@@ -184,10 +191,24 @@ async function run() {
     //Teams
     const teams = database.collection("teams");
 
+    // get all the teams
+    app.get("/teams", verifyJWT, verifyAdmin, async (req, res) => {
+      try {
+        const result = await teams.find({}).toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching teams:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching teams." });
+      }
+    });
+
     // add teams to db
-    app.post("/teams", async (req, res) => {
+    app.post("/teams", verifyJWT, verifyAdmin, async (req, res) => {
       const data = req.body;
-      console.log(data);
+      const result = await teams.insertOne(data);
+      res.send(result);
     });
 
     // Send a ping to confirm a successful connection
