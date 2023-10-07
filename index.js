@@ -251,6 +251,38 @@ async function run() {
       }
     });
 
+    // show team data to all coach page
+    app.get("/coach-teams",async (req, res) => {
+      try {
+        const coaches = await users
+          .aggregate([
+            {
+              $match: { role: "coach" },
+            },
+            {
+              $lookup: {
+                from: "teams",
+                localField: "email",
+                foreignField: "coaches",
+                as: "teams",
+              },
+            },
+            {
+              $project: {
+                _id: 0, // Exclude the _id field
+                email: 1, // Include the "email" field
+                teamNames: "$teams.teamName", // Include the "teams" array
+              },
+            },
+          ])
+          .toArray();
+        res.send(coaches);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send("An error occurred");
+      }
+    });
+
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdmin, async (req, res) => {
       const data = req.body;
