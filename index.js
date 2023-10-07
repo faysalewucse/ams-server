@@ -176,6 +176,34 @@ async function run() {
       }
     );
 
+    app.patch(
+      "/users/assignTeam/:coachEmail",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const coachEmail = req.params.coachEmail;
+        const teamIds = req.body;
+
+        try {
+          // Convert teamIds from an array of strings to an array of ObjectIds
+          const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
+
+          // Update the teams collection to push the coach's email
+          const result = await teams.updateMany(
+            { _id: { $in: teamObjectIds } }, // Match teams by their IDs
+            { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
+          );
+
+          res.send(result);
+        } catch (error) {
+          console.error("Error assigning teams to coach:", error);
+          res.status(500).send({
+            error: "An error occurred while assigning teams to coach.",
+          });
+        }
+      }
+    );
+
     // Update admin status by super admin
     app.patch("/user/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
@@ -190,18 +218,36 @@ async function run() {
     //Teams
     const teams = database.collection("teams");
 
-    // get all the teams
+    // get all the teams with coach data also
     app.get("/teams/:adminEmail", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const adminEmail = req.params.adminEmail;
 
-        const result = await teams.find({ adminEmail: adminEmail }).toArray();
+        // Use aggregation to fetch teams and populate coach data
+        const result = await teams
+          .aggregate([
+            {
+              $match: {
+                adminEmail: adminEmail,
+              },
+            },
+            {
+              $lookup: {
+                from: "users", // Assuming the coaches are in the "users" collection
+                localField: "coaches", // Field in the current collection (teams) to match
+                foreignField: "email", // Field in the "users" collection to match
+                as: "coachData", // Alias for the coach data
+              },
+            },
+          ])
+          .toArray();
+
         res.send(result);
       } catch (error) {
-        console.error("Error fetching teams:", error);
-        res
-          .status(500)
-          .send({ error: "An error occurred while fetching teams." });
+        console.error("Error fetching teams with coach data:", error);
+        res.status(500).send({
+          error: "An error occurred while fetching teams with coach data.",
+        });
       }
     });
 
