@@ -65,18 +65,6 @@ async function run() {
       next();
     };
 
-    const verifySuperAdminOrAdmin = async (req, res, next) => {
-      const email = req.decoded.email;
-      const query = { email: email };
-      const user = await users.findOne(query);
-      if (user?.role !== "sadmin" && user?.role !== "admin") {
-        return res
-          .status(403)
-          .send({ error: true, message: "You are nor Admin or Super Admin" });
-      }
-      next();
-    };
-
     const verifyCoach = async (req, res, next) => {
       const email = req.decoded.email;
       const query = { email: email };
@@ -92,8 +80,9 @@ async function run() {
 
     // TODO: verify instructor remains
     // users
-    // Get all users
-    app.get("/users", verifyJWT, verifySuperAdminOrAdmin, async (req, res) => {
+
+    // Get all users for super admin
+    app.get("/users", verifyJWT, verifySuperAdmin, async (req, res) => {
       try {
         const cursor = users.find();
         const result = await cursor.toArray();
@@ -106,27 +95,42 @@ async function run() {
       }
     });
 
-    // Get users by role
+    // Get all users for admin
     app.get(
-      "/users/byRole",
+      "/users/coach-athlete-parents",
       verifyJWT,
-      verifySuperAdminOrAdmin,
+      verifyAdmin,
       async (req, res) => {
         try {
-          const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
-
-          const cursor = users.find({ role: roleToFind });
+          const cursor = users.find({
+            role: { $in: ["coach", "athlete", "parents"] },
+          });
           const result = await cursor.toArray();
-
           res.send(result);
         } catch (error) {
-          console.error("Error fetching users by role:", error);
+          console.error("Error fetching users:", error);
           res
             .status(500)
-            .send({ error: "An error occurred while fetching users by role." });
+            .send({ error: "An error occurred while fetching users." });
         }
       }
     );
+
+    // Get users by role
+    app.get("/users/byRole", verifyJWT, async (req, res) => {
+      try {
+        const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
+        const cursor = users.find({ role: roleToFind });
+        const result = await cursor.toArray();
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching users by role:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching users by role." });
+      }
+    });
 
     // get athlete for coach
     // app.get("/users/athlete", verifyJWT, verifySuperAdminOrAdmin, verifyCoach, async (req, res) => {
@@ -173,28 +177,25 @@ async function run() {
     );
 
     // Update admin status by super admin
-    app.patch(
-      "/user/:id",
-      verifyJWT,
-      verifySuperAdminOrAdmin,
-      async (req, res) => {
-        const id = req.params.id;
-        const updatedStatus = req.query.status;
-        const result = await users.updateOne(
-          { _id: new ObjectId(id) },
-          { $set: { status: updatedStatus } }
-        );
-        res.send(result);
-      }
-    );
+    app.patch("/user/:id", verifyJWT, async (req, res) => {
+      const id = req.params.id;
+      const updatedStatus = req.query.status;
+      const result = await users.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status: updatedStatus } }
+      );
+      res.send(result);
+    });
 
     //Teams
     const teams = database.collection("teams");
 
     // get all the teams
-    app.get("/teams", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/teams/:adminEmail", verifyJWT, verifyAdmin, async (req, res) => {
       try {
-        const result = await teams.find({}).toArray();
+        const adminEmail = req.params.adminEmail;
+
+        const result = await teams.find({ adminEmail: adminEmail }).toArray();
         res.send(result);
       } catch (error) {
         console.error("Error fetching teams:", error);
