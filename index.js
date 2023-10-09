@@ -42,8 +42,8 @@ async function run() {
     const users = database.collection("users");
 
     const verifySuperAdmin = async (req, res, next) => {
-      const email = req.decoded.email;
-      const query = { email: email };
+      const Id = req.decoded.Id;
+      const query = { Id: Id };
       const user = await users.findOne(query);
       if (user?.role !== "sadmin") {
         return res
@@ -54,8 +54,8 @@ async function run() {
     };
 
     const verifyAdmin = async (req, res, next) => {
-      const email = req.decoded.email;
-      const query = { email: email };
+      const Id = req.decoded.Id;
+      const query = { Id: Id };
       const user = await users.findOne(query);
       if (user?.role !== "admin") {
         return res
@@ -66,8 +66,8 @@ async function run() {
     };
 
     const verifyCoach = async (req, res, next) => {
-      const email = req.decoded.email;
-      const query = { email: email };
+      const Id = req.decoded.Id;
+      const query = { Id: Id };
 
       const user = await users.findOne(query);
       if (user?.role !== "coach") {
@@ -116,14 +116,45 @@ async function run() {
       }
     );
 
-    // Get users by role
     app.get("/users/byRole", verifyJWT, async (req, res) => {
       try {
         const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
-        const cursor = users.find({ role: roleToFind });
-        const result = await cursor.toArray();
 
-        res.send(result);
+        if (roleToFind === "coach") {
+          // If the requested role is "coach," perform aggregation to fetch coaches with team details
+          const coachesWithTeams = await users
+            .aggregate([
+              {
+                $match: { role: "coach" },
+              },
+              {
+                $lookup: {
+                  from: "teams", // Assuming the teams are in the "teams" collection
+                  localField: "Id",
+                  foreignField: "coaches",
+                  as: "teams",
+                },
+              },
+              {
+                $project: {
+                  _id: 1,
+                  name: 1,
+                  Id: 1,
+                  role: 1,
+                  teams: 1, // Include the teams associated with the coach
+                },
+              },
+            ])
+            .toArray();
+
+          res.send(coachesWithTeams);
+        } else {
+          // If the requested role is not "coach," simply fetch users by role
+          const cursor = users.find({ role: roleToFind });
+          const result = await cursor.toArray();
+
+          res.send(result);
+        }
       } catch (error) {
         console.error("Error fetching users by role:", error);
         res
@@ -132,16 +163,9 @@ async function run() {
       }
     });
 
-    // get athlete for coach
-    // app.get("/users/athlete", verifyJWT, verifySuperAdminOrAdmin, verifyCoach, async (req, res) => {
-    //   const query = req.query.role;
-    //   const result = await users.find({ role: query }).toArray();
-    //   res.send(result);
-    // });
-
     app.get("/users/:userEmail", async (req, res) => {
-      const email = req.params.userEmail;
-      const result = await users.findOne({ email: email });
+      const userEmail = req.params.userEmail;
+      const result = await users.findOne({ email: userEmail });
       res.send(result);
     });
 
@@ -152,7 +176,7 @@ async function run() {
       if (existingUser) {
         return res
           .status(400)
-          .json({ error: "User with this email already exists" });
+          .json({ error: "User with this Id already exists" });
       }
 
       const result = await users.insertOne(user);
@@ -160,15 +184,15 @@ async function run() {
     });
 
     app.patch(
-      "/changeUserRole/:userEmail",
+      "/changeUserRole/:userId",
       verifyJWT,
       verifyAdmin,
       async (req, res) => {
-        const userEmail = req.params.userEmail;
+        const userId = req.params.userId;
         const newRole = req.query.role;
 
         const result = await users.updateOne(
-          { email: userEmail },
+          { Id: userId },
           { $set: { role: newRole } }
         );
 
@@ -177,21 +201,22 @@ async function run() {
     );
 
     app.patch(
-      "/users/assignTeam/:coachEmail",
+      "/users/assignTeam/:coachId",
       verifyJWT,
       verifyAdmin,
       async (req, res) => {
-        const coachEmail = req.params.coachEmail;
+        const coachId = req.params.coachId;
         const teamIds = req.body;
 
+        console.log(coachId, teamIds);
         try {
           // Convert teamIds from an array of strings to an array of ObjectIds
           const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
-          // Update the teams collection to push the coach's email
+          // Update the teams collection to push the coach's Id
           const result = await teams.updateMany(
             { _id: { $in: teamObjectIds } }, // Match teams by their IDs
-            { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
+            { $push: { coaches: coachId } } // Push coachId to the coaches array
           );
 
           res.send(result);
@@ -219,23 +244,23 @@ async function run() {
     const teams = database.collection("teams");
 
     // get all the teams with coach data also
-    app.get("/teams/:adminEmail", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/teams/:adminId", verifyJWT, verifyAdmin, async (req, res) => {
       try {
-        const adminEmail = req.params.adminEmail;
+        const adminId = req.params.adminId;
 
         // Use aggregation to fetch teams and populate coach data
         const result = await teams
           .aggregate([
             {
               $match: {
-                adminEmail: adminEmail,
+                adminId: adminId,
               },
             },
             {
               $lookup: {
                 from: "users", // Assuming the coaches are in the "users" collection
                 localField: "coaches", // Field in the current collection (teams) to match
-                foreignField: "email", // Field in the "users" collection to match
+                foreignField: "Id", // Field in the "users" collection to match
                 as: "coachData", // Alias for the coach data
               },
             },
@@ -248,38 +273,6 @@ async function run() {
         res.status(500).send({
           error: "An error occurred while fetching teams with coach data.",
         });
-      }
-    });
-
-    // show team data to all coach page
-    app.get("/coach-teams",async (req, res) => {
-      try {
-        const coaches = await users
-          .aggregate([
-            {
-              $match: { role: "coach" },
-            },
-            {
-              $lookup: {
-                from: "teams",
-                localField: "email",
-                foreignField: "coaches",
-                as: "teams",
-              },
-            },
-            {
-              $project: {
-                _id: 0, // Exclude the _id field
-                email: 1, // Include the "email" field
-                teamNames: "$teams.teamName", // Include the "teams" array
-              },
-            },
-          ])
-          .toArray();
-        res.send(coaches);
-      } catch (err) {
-        console.error(err);
-        res.status(500).send("An error occurred");
       }
     });
 
