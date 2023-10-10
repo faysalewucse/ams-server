@@ -17,7 +17,9 @@ app.get("/", (req, res) => {
 
 app.post("/jwt", (req, res) => {
   const user = req.body;
-  const token = jwt.sign(user, process.env.JWT_SECRET_KEY, { expiresIn: "1h" });
+  const token = jwt.sign(user, process.env.JWT_SECRET_KEY, {
+    expiresIn: "10h",
+  });
   res.send({ token });
 });
 
@@ -42,8 +44,8 @@ async function run() {
     const users = database.collection("users");
 
     const verifySuperAdmin = async (req, res, next) => {
-      const Id = req.decoded.Id;
-      const query = { Id: Id };
+      const email = req.decoded.email;
+      const query = { email: email };
       const user = await users.findOne(query);
       if (user?.role !== "sadmin") {
         return res
@@ -54,9 +56,10 @@ async function run() {
     };
 
     const verifyAdmin = async (req, res, next) => {
-      const Id = req.decoded.Id;
-      const query = { Id: Id };
+      const email = req.decoded.email;
+      const query = { email: email };
       const user = await users.findOne(query);
+      console.log(user);
       if (user?.role !== "admin") {
         return res
           .status(403)
@@ -66,8 +69,8 @@ async function run() {
     };
 
     const verifyCoach = async (req, res, next) => {
-      const Id = req.decoded.Id;
-      const query = { Id: Id };
+      const email = req.decoded.email;
+      const query = { email: email };
 
       const user = await users.findOne(query);
       if (user?.role !== "coach") {
@@ -116,7 +119,7 @@ async function run() {
       }
     );
 
-    app.get("/users/byRole", verifyJWT, async (req, res) => {
+    app.get("/users/byRole", async (req, res) => {
       try {
         const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
 
