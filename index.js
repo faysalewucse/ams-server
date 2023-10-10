@@ -133,7 +133,7 @@ async function run() {
               {
                 $lookup: {
                   from: "teams", // Assuming the teams are in the "teams" collection
-                  localField: "Id",
+                  localField: "email",
                   foreignField: "coaches",
                   as: "teams",
                 },
@@ -144,7 +144,8 @@ async function run() {
                   name: 1,
                   Id: 1,
                   role: 1,
-                  teams: 1, // Include the teams associated with the coach
+                  status: 1,
+                  teams: 1,
                 },
               },
             ])
@@ -247,23 +248,23 @@ async function run() {
     const teams = database.collection("teams");
 
     // get all the teams with coach data also
-    app.get("/teams/:adminId", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/teams/:adminEmail", verifyJWT, verifyAdmin, async (req, res) => {
       try {
-        const adminId = req.params.adminId;
+        const adminEmail = req.params.adminEmail;
 
         // Use aggregation to fetch teams and populate coach data
         const result = await teams
           .aggregate([
             {
               $match: {
-                adminId: adminId,
+                adminEmail: adminEmail,
               },
             },
             {
               $lookup: {
                 from: "users", // Assuming the coaches are in the "users" collection
                 localField: "coaches", // Field in the current collection (teams) to match
-                foreignField: "Id", // Field in the "users" collection to match
+                foreignField: "email", // Field in the "users" collection to match
                 as: "coachData", // Alias for the coach data
               },
             },
