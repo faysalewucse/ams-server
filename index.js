@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { verifyJWT } = require("./middleware/verifyJWT");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 require("dotenv").config();
 
@@ -23,7 +24,6 @@ app.post("/jwt", (req, res) => {
   res.send({ token });
 });
 
-const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const uri = process.env.MONGODB_URL;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -59,7 +59,7 @@ async function run() {
       const email = req.decoded.email;
       const query = { email: email };
       const user = await users.findOne(query);
-      console.log(user);
+
       if (user?.role !== "admin") {
         return res
           .status(403)
@@ -121,14 +121,15 @@ async function run() {
 
     app.get("/users/byRole", async (req, res) => {
       try {
-        const roleToFind = req.query.role || ""; // Get the role from query parameters or use an empty string if not provided
+        const roleToFind = req.query.role || "";
+        const adminEmail = req.query.adminEmail || ""; // Get the role from query parameters or use an empty string if not provided
 
         if (roleToFind === "coach") {
           // If the requested role is "coach," perform aggregation to fetch coaches with team details
           const coachesWithTeams = await users
             .aggregate([
               {
-                $match: { role: "coach" },
+                $match: { role: "coach", adminEmail: adminEmail },
               },
               {
                 $lookup: {
@@ -142,7 +143,7 @@ async function run() {
                 $project: {
                   _id: 1,
                   name: 1,
-                  Id: 1,
+                  email: 1,
                   role: 1,
                   status: 1,
                   teams: 1,
@@ -188,15 +189,15 @@ async function run() {
     });
 
     app.patch(
-      "/changeUserRole/:userId",
+      "/changeUserRole/:userEmail",
       verifyJWT,
       verifyAdmin,
       async (req, res) => {
-        const userId = req.params.userId;
+        const userEmail = req.params.userEmail;
         const newRole = req.query.role;
 
         const result = await users.updateOne(
-          { Id: userId },
+          { email: userEmail },
           { $set: { role: newRole } }
         );
 
@@ -205,22 +206,21 @@ async function run() {
     );
 
     app.patch(
-      "/users/assignTeam/:coachId",
+      "/users/assignTeam/:coachEmail",
       verifyJWT,
       verifyAdmin,
       async (req, res) => {
-        const coachId = req.params.coachId;
+        const coachEmail = req.params.coachEmail;
         const teamIds = req.body;
 
-        console.log(coachId, teamIds);
         try {
           // Convert teamIds from an array of strings to an array of ObjectIds
           const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
-          // Update the teams collection to push the coach's Id
+          // Update the teams collection to push the coach's email
           const result = await teams.updateMany(
             { _id: { $in: teamObjectIds } }, // Match teams by their IDs
-            { $push: { coaches: coachId } } // Push coachId to the coaches array
+            { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
           );
 
           res.send(result);
@@ -233,10 +233,12 @@ async function run() {
       }
     );
 
-    // Update admin status by super admin
     app.patch("/user/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const updatedStatus = req.query.status;
+
+      console.log(id, updatedStatus);
+
       const result = await users.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: updatedStatus } }
