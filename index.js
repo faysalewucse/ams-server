@@ -206,7 +206,7 @@ async function run() {
     );
 
     app.patch(
-      "/users/assignTeam/:coachEmail",
+      "/coach/assignTeam/:coachEmail",
       verifyJWT,
       verifyAdmin,
       async (req, res) => {
@@ -228,6 +228,34 @@ async function run() {
           console.error("Error assigning teams to coach:", error);
           res.status(500).send({
             error: "An error occurred while assigning teams to coach.",
+          });
+        }
+      }
+    );
+
+    app.patch(
+      "/team/updateCoaches/:teamId",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        const teamId = req.params.teamId;
+        const coachEmails = req.body;
+
+        try {
+          // Convert coachEmails from an array to an array of strings
+          const coachEmailStrings = coachEmails.map((email) => String(email));
+
+          // Update the team collection to set the coaches property
+          const result = await teams.updateMany(
+            { _id: new ObjectId(teamId) }, // Match the team by its ID
+            { $push: { coaches: { $each: coachEmailStrings } } } // Set the coaches property to the provided coachEmails
+          );
+
+          res.send(result);
+        } catch (error) {
+          console.error("Error updating coaches for the team:", error);
+          res.status(500).send({
+            error: "An error occurred while updating coaches for the team.",
           });
         }
       }
