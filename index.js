@@ -264,9 +264,6 @@ async function run() {
     app.patch("/user/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const updatedStatus = req.query.status;
-
-      console.log(id, updatedStatus);
-
       const result = await users.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: updatedStatus } }
