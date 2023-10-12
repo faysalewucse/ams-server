@@ -275,7 +275,7 @@ async function run() {
     const teams = database.collection("teams");
 
     // get all the teams with coach data also
-    app.get("/teams/:adminEmail", verifyJWT, verifyAdmin, async (req, res) => {
+    app.get("/teams/:adminEmail", verifyJWT, async (req, res) => {
       try {
         const adminEmail = req.params.adminEmail;
 
