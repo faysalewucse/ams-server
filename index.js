@@ -103,15 +103,19 @@ async function run() {
 
     // Get all users for admin
     app.get(
-      "/users/coach-athlete-parents",
+      "/users/coach-athlete-parents/:adminEmail",
       verifyJWT,
       verifyAdmin,
       async (req, res) => {
         try {
+          const adminEmail = req.params.adminEmail;
+
           const cursor = users.find({
             role: { $in: ["coach", "athlete", "parents"] },
+            adminEmail: adminEmail,
           });
           const result = await cursor.toArray();
+
           res.send(result);
         } catch (error) {
           console.error("Error fetching users:", error);
@@ -136,7 +140,7 @@ async function run() {
               },
               {
                 $lookup: {
-                  from: "teams", // Assuming the teams are in the "teams" collection
+                  from: "teams",
                   localField: "email",
                   foreignField: "coaches",
                   as: "teams",
@@ -158,7 +162,10 @@ async function run() {
           res.send(coachesWithTeams);
         } else {
           // If the requested role is not "coach," simply fetch users by role
-          const cursor = users.find({ role: roleToFind });
+          const cursor = users.find({
+            role: roleToFind,
+            adminEmail: adminEmail,
+          });
           const result = await cursor.toArray();
 
           res.send(result);
