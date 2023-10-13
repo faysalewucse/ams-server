@@ -178,6 +178,14 @@ async function run() {
       }
     });
 
+    app.get("/admins", async (req, res) => {
+      const result = await users
+        .find({ role: "admin", status: "approved" })
+        .toArray();
+
+      res.send(result);
+    });
+
     app.get("/users/:userEmail", async (req, res) => {
       const userEmail = req.params.userEmail;
       const result = await users.findOne({ email: userEmail });
