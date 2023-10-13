@@ -42,6 +42,8 @@ async function run() {
 
     const database = client.db("overtimeDB");
     const users = database.collection("users");
+    const teams = database.collection("teams");
+    const events = database.collection("events");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -271,9 +273,6 @@ async function run() {
       res.send(result);
     });
 
-    //Teams
-    const teams = database.collection("teams");
-
     // get all the teams with coach data also
     app.get("/teams/:adminEmail", verifyJWT, async (req, res) => {
       try {
@@ -312,6 +311,41 @@ async function run() {
       const data = req.body;
       const result = await teams.insertOne(data);
       res.send(result);
+    });
+
+    // ============ Events =========
+    app.get("/events/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const adminEmail = req.params.adminEmail;
+
+        const result = await events.find({ adminEmail }).toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching events:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching events." });
+      }
+    });
+
+    app.post("/events", verifyJWT, verifyAdmin, async (req, res) => {
+      try {
+        const eventData = req.body;
+
+        console.log(eventData);
+
+        const result = await events.insertOne(eventData);
+
+        res.json({
+          message: "Event created successfully",
+          eventId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error creating event:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while creating the event." });
+      }
     });
 
     // Send a ping to confirm a successful connection
