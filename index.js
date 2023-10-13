@@ -307,6 +307,19 @@ async function run() {
       }
     });
 
+    // get teams for specific coaches
+    app.get("/teams/coach-team/:coachEmail", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const coachEmail = req.params.coachEmail;
+        const result = await teams
+          .find({ coaches: { $in: [coachEmail] } })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "An error has occurred" });
+      }
+    });
+
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdmin, async (req, res) => {
       const data = req.body;
