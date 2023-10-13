@@ -44,6 +44,7 @@ async function run() {
     const users = database.collection("users");
     const teams = database.collection("teams");
     const events = database.collection("events");
+    const notifications = database.collection("notifications");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -307,17 +308,22 @@ async function run() {
     });
 
     // get teams for specific coaches
-    app.get("/teams/coach-team/:coachEmail", verifyJWT, verifyCoach, async (req, res) => {
-      try {
-        const coachEmail = req.params.coachEmail;
-        const result = await teams
-          .find({ coaches: { $in: [coachEmail] } })
-          .toArray();
-        res.send(result);
-      } catch (error) {
-        res.status(500).send({ error: "An error has occurred" });
+    app.get(
+      "/teams/coach-team/:coachEmail",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        try {
+          const coachEmail = req.params.coachEmail;
+          const result = await teams
+            .find({ coaches: { $in: [coachEmail] } })
+            .toArray();
+          res.send(result);
+        } catch (error) {
+          res.status(500).send({ error: "An error has occurred" });
+        }
       }
-    });
+    );
 
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdmin, async (req, res) => {
@@ -331,7 +337,10 @@ async function run() {
       try {
         const adminEmail = req.params.adminEmail;
 
-        const result = await events.find({ adminEmail }).toArray();
+        const result = await events
+          .find({ adminEmail })
+          .sort({ _id: -1 })
+          .toArray();
         res.json(result);
       } catch (error) {
         console.error("Error fetching events:", error);
@@ -358,6 +367,42 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while creating the event." });
+      }
+    });
+
+    // ============ Notifications =========
+    app.get("/notifications/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const adminEmail = req.params.adminEmail;
+
+        const result = await notifications
+          .find({ adminEmail })
+          .sort({ _id: -1 })
+          .toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching notifications:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching notification." });
+      }
+    });
+
+    app.post("/notification", verifyJWT, verifyAdmin, async (req, res) => {
+      try {
+        const notificationData = req.body;
+
+        const result = await notifications.insertOne(notificationData);
+
+        res.json({
+          message: "Notification created successfully",
+          notificationId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error creating notification:", error);
+        res.status(500).json({
+          error: "An error occurred while creating the notification.",
+        });
       }
     });
 
