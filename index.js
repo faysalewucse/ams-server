@@ -359,6 +359,16 @@ async function run() {
       const result = await teams.insertOne(data);
       res.send(result);
     });
+    app.delete("/teams/:id", verifyJWT, verifyAdmin, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await teams.deleteOne({ _id: new ObjectId(id) });
+        res.send(result);
+      } catch (error) {
+        console.error(error.message);
+        res.status(500).send("An error has occurred!");
+      }
+    });
 
     // ============ Events =========
     app.get("/events/:adminEmail", verifyJWT, async (req, res) => {
