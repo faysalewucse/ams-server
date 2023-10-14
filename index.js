@@ -45,6 +45,7 @@ async function run() {
     const teams = database.collection("teams");
     const events = database.collection("events");
     const notifications = database.collection("notifications");
+    const messages = database.collection("messages");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -442,6 +443,25 @@ async function run() {
           error: "An error occurred while creating the notification.",
         });
       }
+    });
+
+    // =============== Message API ===============
+    app.get("/message", verifyJWT, async (req, res) => {
+      const to = req.query.to;
+      const from = req.query.from;
+
+      console.log(to, from);
+
+      const response = await messages.find({ to, from }).toArray();
+
+      res.send(response);
+    });
+    app.post("/message", verifyJWT, async (req, res) => {
+      const messageData = req.body;
+
+      const response = await messages.insertOne(messageData);
+
+      res.send(response);
     });
 
     // Send a ping to confirm a successful connection
