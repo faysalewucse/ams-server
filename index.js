@@ -136,7 +136,6 @@ async function run() {
           matchWith.adminEmail = adminEmail;
         }
 
-        console.log(adminEmail, matchWith);
         if (roleToFind === "coach") {
           const coachesWithTeams = await users
             .aggregate([
@@ -166,9 +165,8 @@ async function run() {
 
           res.send(coachesWithTeams);
         } else {
-          console.log("YES");
-          // If the requested role is not "coach," simply fetch users by role
           const cursor = users.find(matchWith);
+
           const result = await cursor.toArray();
 
           res.send(result);
