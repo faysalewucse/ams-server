@@ -126,17 +126,22 @@ async function run() {
       }
     );
 
-    app.get("/users/byRole", async (req, res) => {
+    app.get("/users/byRole", verifyJWT, async (req, res) => {
       try {
         const roleToFind = req.query.role || "";
-        const adminEmail = req.query.adminEmail || ""; // Get the role from query parameters or use an empty string if not provided
+        const adminEmail = req.query.adminEmail || "";
 
+        let matchWith = { role: roleToFind };
+        if (adminEmail !== "superadmin@gmail.com") {
+          matchWith.adminEmail = adminEmail;
+        }
+
+        console.log(adminEmail, matchWith);
         if (roleToFind === "coach") {
-          // If the requested role is "coach," perform aggregation to fetch coaches with team details
           const coachesWithTeams = await users
             .aggregate([
               {
-                $match: { role: "coach", adminEmail: adminEmail },
+                $match: matchWith,
               },
               {
                 $lookup: {
@@ -161,11 +166,9 @@ async function run() {
 
           res.send(coachesWithTeams);
         } else {
+          console.log("YES");
           // If the requested role is not "coach," simply fetch users by role
-          const cursor = users.find({
-            role: roleToFind,
-            adminEmail: adminEmail,
-          });
+          const cursor = users.find(matchWith);
           const result = await cursor.toArray();
 
           res.send(result);
@@ -176,6 +179,18 @@ async function run() {
           .status(500)
           .send({ error: "An error occurred while fetching users by role." });
       }
+    });
+
+    app.get("/admins/:secretKey", async (req, res) => {
+      const secretKey = req.params.secretKey;
+      if (secretKey !== "tfvbhyg")
+        return res.status(500).send({
+          error: "An error occurred while assigning teams to coach.",
+        });
+
+      const result = await users.find({ role: "admin" }).toArray();
+
+      res.send(result);
     });
 
     app.get("/admins", async (req, res) => {
