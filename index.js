@@ -360,6 +360,28 @@ async function run() {
       const result = await teams.insertOne(data);
       res.send(result);
     });
+
+    // remove coach from a team
+    app.patch(
+      "/teams/coach/:coachEmail",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const coachEmail = req.params.coachEmail;
+          const teamId = req.query.team;
+          const result = await teams.updateOne(
+            { _id: new ObjectId(teamId) },
+            { $pull: { coaches: coachEmail } }
+          );
+          res.send(result);
+        } catch (error) {
+          console.error(error.message);
+          res.status(501).send("An error occurred!");
+        }
+      }
+    );
+
     app.delete("/teams/:id", verifyJWT, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
