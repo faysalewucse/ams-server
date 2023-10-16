@@ -127,6 +127,56 @@ async function run() {
       }
     );
 
+    // get all users for coach
+    app.get(
+      "/users/athlete-parents/:adminEmail",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        try {
+          const adminEmail = req.params.adminEmail;
+
+          const cursor = users.find({
+            role: { $in: ["athlete", "parents"] },
+            adminEmail: adminEmail,
+          });
+          const result = await cursor.toArray();
+
+          res.send(result);
+        } catch (error) {
+          console.error("Error fetching users:", error);
+          res
+            .status(500)
+            .send({ error: "An error occurred while fetching users." });
+        }
+      }
+    );
+
+    // get all users for parent
+    // app.get(
+    //   "/users/athlete/:parentsEmail",
+    //   verifyJWT,
+    //   verifyAdmin,
+    //   async (req, res) => {
+    //     try {
+    //       const adminEmail = req.params.adminEmail;
+
+    //       const cursor = users.find({
+    //         role: { $in: ["athlete", "parents"] },
+    //         adminEmail: adminEmail,
+    //       });
+    //       const result = await cursor.toArray();
+
+    //       res.send(result);
+    //     } catch (error) {
+    //       console.error("Error fetching users:", error);
+    //       res
+    //         .status(500)
+    //         .send({ error: "An error occurred while fetching users." });
+    //     }
+    //   }
+    // );
+
     app.get("/users/byRole", verifyJWT, async (req, res) => {
       try {
         const roleToFind = req.query.role || "";
@@ -472,12 +522,18 @@ async function run() {
       const to = req.query.to;
       const from = req.query.from;
 
-      console.log(to, from);
-
-      const response = await messages.find({ to, from }).toArray();
+      const response = await messages
+        .find({
+          $or: [
+            { to: to, from: from },
+            { to: from, from: to },
+          ],
+        })
+        .toArray();
 
       res.send(response);
     });
+
     app.post("/message", verifyJWT, async (req, res) => {
       const messageData = req.body;
 
