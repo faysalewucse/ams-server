@@ -3,6 +3,7 @@ const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { verifyJWT } = require("./middleware/verifyJWT");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
+const { Server } = require("socket.io");
 
 require("dotenv").config();
 
@@ -11,6 +12,26 @@ app.use(cors());
 app.use(express.json());
 
 const port = process.env.PORT || 5000;
+
+const server = app.listen(port, () => {
+  console.log(`AMS Server listening on port ${port}`);
+});
+
+const io = new Server(server, {
+  cors: {
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST"],
+  },
+});
+
+io.on("connection", (socket) => {
+  console.log(`User connected ${socket.id}`);
+
+  socket.on("chatMessage", (message) => {
+    console.log(`Received chat message: ${message}`);
+    io.emit("chatMessage", message);
+  });
+});
 
 app.get("/", (req, res) => {
   res.send("AMS Server is running.");
@@ -537,7 +558,11 @@ async function run() {
     app.post("/message", verifyJWT, async (req, res) => {
       const messageData = req.body;
 
+      // Insert the message into the MongoDB collection
       const response = await messages.insertOne(messageData);
+
+      // Emit the message to the relevant room (e.g., based on `to` and `from`)
+      io.to(messageData.to).emit("newMessage", messageData);
 
       res.send(response);
     });
@@ -551,7 +576,3 @@ async function run() {
   }
 }
 run().catch(console.dir);
-
-app.listen(port, () => {
-  console.log(`AMS Server listening on port ${port}`);
-});
