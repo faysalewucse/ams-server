@@ -502,6 +502,44 @@ async function run() {
       }
     });
 
+    app.patch("/events/:id", verifyJWT, verifyAdmin, async (req, res) => {
+      try {
+        const updatedData = req.body;
+        const result = await events.updateOne(
+          {
+            _id: new ObjectId(req.params.id),
+          },
+          updatedData,
+          { upsert: true }
+        );
+        res.json({
+          message: "Event updated successfully",
+          eventId: result.modifiedCount,
+        });
+      } catch (error) {
+        console.error("Error updating event:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while updating the event." });
+      }
+    });
+
+    app.delete("/events/:id", verifyJWT, verifyAdmin, async (req, res) => {
+      try {
+        const result = await events.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+        res.json({
+          message: "Event deleted successfully",
+          eventId: result.deletedCount,
+        });
+      } catch (error) {
+        res
+          .status(500)
+          .json({ error: "An error occurred while deleting the event." });
+      }
+    });
+
     // ============ Notifications =========
     app.get("/notifications/:adminEmail", verifyJWT, async (req, res) => {
       try {
