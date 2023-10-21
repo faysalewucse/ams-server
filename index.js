@@ -124,7 +124,6 @@ async function run() {
     });
 
     app.get("/user/:email", verifyJWT, async (req, res) => {
-      console.log(req.params.email);
       try {
         const result = await users.findOne({ email: req.params.email });
         res.send(result);
@@ -249,8 +248,35 @@ async function run() {
             .toArray();
 
           res.send(coachesWithTeams);
+          
+        } else if (roleToFind === "athlete") {
+          const athletesWithTeams = await users
+            .aggregate([
+              {
+                $match: matchWith,
+              },
+              {
+                $lookup: {
+                  from: "teams",
+                  localField: "email",
+                  foreignField: "athletes",
+                  as: "teams",
+                },
+              },
+              {
+                $project: {
+                  _id: 1,
+                  name: 1,
+                  email: 1,
+                  role: 1,
+                  status: 1,
+                  teams: 1,
+                },
+              },
+            ])
+            .toArray();
+          res.send(athletesWithTeams);
         } else {
-          console.log(matchWith);
           const cursor = users.find(matchWith);
 
           const result = await cursor.toArray();
@@ -365,7 +391,7 @@ async function run() {
           // Update the teams collection to push the coach's email
           const result = await teams.updateMany(
             { _id: { $in: teamObjectIds } }, // Match teams by their IDs
-            { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
+            { $push: { athletes: coachEmail } } // Push coachEmail to the coaches array
           );
 
           res.send(result);
@@ -486,6 +512,27 @@ async function run() {
           const result = await teams.updateOne(
             { _id: new ObjectId(teamId) },
             { $pull: { coaches: coachEmail } }
+          );
+          res.send(result);
+        } catch (error) {
+          console.error(error.message);
+          res.status(501).send("An error occurred!");
+        }
+      }
+    );
+
+    // remove athlete from team
+    app.patch(
+      "/teams/athlete/:athleteEmail",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        try {
+          const athleteEmail = req.params.athleteEmail;
+          const teamId = req.query.team;
+          const result = await teams.updateOne(
+            { _id: new ObjectId(teamId) },
+            { $pull: { athletes: athleteEmail } }
           );
           res.send(result);
         } catch (error) {
