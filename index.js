@@ -123,6 +123,19 @@ async function run() {
       }
     });
 
+    app.get("/user/:email", verifyJWT, async (req, res) => {
+      console.log(req.params.email);
+      try {
+        const result = await users.findOne({ email: req.params.email });
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching user." });
+      }
+    });
+
     // Get all users for admin
     app.get(
       "/users/coach-athlete-parents/:adminEmail",
@@ -174,29 +187,29 @@ async function run() {
     );
 
     // get all users for parent
-    // app.get(
-    //   "/users/athlete/:parentsEmail",
-    //   verifyJWT,
-    //   verifyAdmin,
-    //   async (req, res) => {
-    //     try {
-    //       const adminEmail = req.params.adminEmail;
+    app.get(
+      "/users/athlete/:parentsEmail",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const parentsEmail = req.params.parentsEmail;
 
-    //       const cursor = users.find({
-    //         role: { $in: ["athlete", "parents"] },
-    //         adminEmail: adminEmail,
-    //       });
-    //       const result = await cursor.toArray();
+          const cursor = users.find({
+            role: { $in: ["athlete"] },
+            parentsEmail: parentsEmail,
+          });
+          const result = await cursor.toArray();
 
-    //       res.send(result);
-    //     } catch (error) {
-    //       console.error("Error fetching users:", error);
-    //       res
-    //         .status(500)
-    //         .send({ error: "An error occurred while fetching users." });
-    //     }
-    //   }
-    // );
+          res.send(result);
+        } catch (error) {
+          console.error("Error fetching users:", error);
+          res
+            .status(500)
+            .send({ error: "An error occurred while fetching users." });
+        }
+      }
+    );
 
     app.get("/users/byRole", verifyJWT, async (req, res) => {
       try {
@@ -237,6 +250,7 @@ async function run() {
 
           res.send(coachesWithTeams);
         } else {
+          console.log(matchWith);
           const cursor = users.find(matchWith);
 
           const result = await cursor.toArray();
@@ -337,6 +351,34 @@ async function run() {
     );
 
     app.patch(
+      "/athlete/assignTeam/:coachEmail",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        const coachEmail = req.params.coachEmail;
+        const teamIds = req.body;
+
+        try {
+          // Convert teamIds from an array of strings to an array of ObjectIds
+          const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
+
+          // Update the teams collection to push the coach's email
+          const result = await teams.updateMany(
+            { _id: { $in: teamObjectIds } }, // Match teams by their IDs
+            { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
+          );
+
+          res.send(result);
+        } catch (error) {
+          console.error("Error assigning teams to coach:", error);
+          res.status(500).send({
+            error: "An error occurred while assigning teams to coach.",
+          });
+        }
+      }
+    );
+
+    app.patch(
       "/team/updateCoaches/:teamId",
       verifyJWT,
       verifyAdmin,
@@ -389,10 +431,10 @@ async function run() {
             },
             {
               $lookup: {
-                from: "users", // Assuming the coaches are in the "users" collection
-                localField: "coaches", // Field in the current collection (teams) to match
-                foreignField: "email", // Field in the "users" collection to match
-                as: "coachData", // Alias for the coach data
+                from: "users",
+                localField: "coaches",
+                foreignField: "email",
+                as: "coachData",
               },
             },
           ])
@@ -509,8 +551,9 @@ async function run() {
           {
             _id: new ObjectId(req.params.id),
           },
-          updatedData,
-          { upsert: true }
+          {
+            $set: updatedData,
+          }
         );
         res.json({
           message: "Event updated successfully",
