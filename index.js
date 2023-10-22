@@ -338,6 +338,11 @@ async function run() {
       }
     });
 
+    // delete user
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {
+     
+    });
+
     app.patch(
       "/coach/assignTeam/:coachEmail",
       verifyJWT,
