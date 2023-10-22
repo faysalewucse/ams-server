@@ -242,7 +242,8 @@ async function run() {
               {
                 $project: {
                   _id: 1,
-                  name: 1,
+                  firstName: 1,
+                  lastName: 1,
                   email: 1,
                   role: 1,
                   status: 1,
@@ -324,6 +325,18 @@ async function run() {
         res.send(result);
       }
     );
+
+    // update user profile
+    app.patch("/updateProfile/:userEmail", async (req, res) => {
+      const email = req.params.userEmail;
+      const data = req.body;
+      try {
+        const result = await users.updateOne({ email: email }, data);
+        res.send(result);
+      } catch (error) {
+        res.status(500).send("an error occurred");
+      }
+    });
 
     app.patch(
       "/coach/assignTeam/:coachEmail",
