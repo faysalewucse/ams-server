@@ -212,15 +212,20 @@ async function run() {
 
     app.get("/users/byRole", verifyJWT, async (req, res) => {
       try {
+        const teamCount = await teams.countDocuments();
+
         const roleToFind = req.query.role || "";
         const adminEmail = req.query.adminEmail || "";
 
         let matchWith = { role: roleToFind };
-        if (adminEmail !== "superadmin@gmail.com") {
+        if (adminEmail !== "joseph@gmail.com") {
           matchWith.adminEmail = adminEmail;
         }
 
-        if (roleToFind === "coach") {
+        if (
+          (roleToFind === "coach" || roleToFind === "athlete") &&
+          teamCount !== 0
+        ) {
           const coachesWithTeams = await users
             .aggregate([
               {
@@ -230,7 +235,7 @@ async function run() {
                 $lookup: {
                   from: "teams",
                   localField: "email",
-                  foreignField: "coaches",
+                  foreignField: roleToFind === "coach" ? "coaches" : "athletes",
                   as: "teams",
                 },
               },
@@ -248,34 +253,6 @@ async function run() {
             .toArray();
 
           res.send(coachesWithTeams);
-          
-        } else if (roleToFind === "athlete") {
-          const athletesWithTeams = await users
-            .aggregate([
-              {
-                $match: matchWith,
-              },
-              {
-                $lookup: {
-                  from: "teams",
-                  localField: "email",
-                  foreignField: "athletes",
-                  as: "teams",
-                },
-              },
-              {
-                $project: {
-                  _id: 1,
-                  name: 1,
-                  email: 1,
-                  role: 1,
-                  status: 1,
-                  teams: 1,
-                },
-              },
-            ])
-            .toArray();
-          res.send(athletesWithTeams);
         } else {
           const cursor = users.find(matchWith);
 
@@ -476,22 +453,17 @@ async function run() {
     });
 
     // get teams for specific coaches
-    app.get(
-      "/teams/coach-team/:coachEmail",
-      verifyJWT,
-      verifyCoach,
-      async (req, res) => {
-        try {
-          const coachEmail = req.params.coachEmail;
-          const result = await teams
-            .find({ coaches: { $in: [coachEmail] } })
-            .toArray();
-          res.send(result);
-        } catch (error) {
-          res.status(500).send({ error: "An error has occurred" });
-        }
+    app.get("/teams/coach-team/:coachEmail", verifyJWT, async (req, res) => {
+      try {
+        const coachEmail = req.params.coachEmail;
+        const result = await teams
+          .find({ coaches: { $in: [coachEmail] } })
+          .toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ error: "An error has occurred" });
       }
-    );
+    });
 
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdmin, async (req, res) => {
