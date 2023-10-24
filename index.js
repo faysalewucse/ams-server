@@ -93,6 +93,21 @@ async function run() {
       next();
     };
 
+    const verifyAdminOrCoach = async (req, res, next) => {
+      const email = req.decoded.email;
+      console.log(email);
+      const query = { email: email };
+      const user = await users.findOne(query);
+
+      console.log(user);
+      if (user?.role !== "admin" && user?.role !== "coach") {
+        return res
+          .status(403)
+          .send({ error: true, message: "You are not an Admin or Coach" });
+      }
+      next();
+    };
+
     const verifyCoach = async (req, res, next) => {
       const email = req.decoded.email;
       const query = { email: email };
@@ -132,6 +147,23 @@ async function run() {
         res
           .status(500)
           .send({ error: "An error occurred while fetching user." });
+      }
+    });
+
+    app.patch("/users/change-profile-pic/:email", async (req, res) => {
+      try {
+        const userEmail = req.params.email;
+        const { url: newPhotoURL } = req.body;
+
+        const result = await users.updateOne(
+          { email: userEmail },
+          { $set: { photoURL: newPhotoURL } }
+        );
+        res.send(result);
+      } catch (error) {
+        return res
+          .status(500)
+          .json({ error: "Failed to update user photoURL" });
       }
     });
 
@@ -216,13 +248,23 @@ async function run() {
 
         const roleToFind = req.query.role || "";
         const adminEmail = req.query.adminEmail || "";
+        const parentsEmail = req.query.parentsEmail || "";
 
         let matchWith = { role: roleToFind };
-        if (adminEmail !== "joseph@gmail.com") {
+        if (adminEmail !== "joseph@gmail.com" && !parentsEmail) {
           matchWith.adminEmail = adminEmail;
         }
 
-        if (
+        if (roleToFind === "athlete" && parentsEmail) {
+          console.log("Here");
+          matchWith.parentsEmail = parentsEmail;
+          console.log({ matchWith });
+          const cursor = users.find(matchWith);
+
+          const result = await cursor.toArray();
+
+          res.send(result);
+        } else if (
           (roleToFind === "coach" || roleToFind === "athlete") &&
           teamCount !== 0
         ) {
@@ -235,7 +277,10 @@ async function run() {
                 $lookup: {
                   from: "teams",
                   localField: "email",
-                  foreignField: roleToFind === "coach" ? "coaches" : "athletes",
+                  foreignField:
+                    roleToFind === "coach"
+                      ? "coaches"
+                      : "athletes.athleteEmail",
                   as: "teams",
                 },
               },
@@ -325,7 +370,7 @@ async function run() {
       const email = req.params.userEmail;
       const data = req.body;
       try {
-        const result = await users.updateOne({ email: email }, data);
+        const result = await users.updateOne({ email: email }, { $set: data });
         res.send(result);
       } catch (error) {
         res.status(500).send("an error occurred");
@@ -364,11 +409,11 @@ async function run() {
     );
 
     app.patch(
-      "/athlete/assignTeam/:coachEmail",
+      "/athlete/assignTeam/:athleteEmail",
       verifyJWT,
       verifyCoach,
       async (req, res) => {
-        const coachEmail = req.params.coachEmail;
+        const athleteEmail = req.params.athleteEmail;
         const teamIds = req.body;
 
         try {
@@ -378,7 +423,7 @@ async function run() {
           // Update the teams collection to push the coach's email
           const result = await teams.updateMany(
             { _id: { $in: teamObjectIds } }, // Match teams by their IDs
-            { $push: { athletes: coachEmail } } // Push coachEmail to the coaches array
+            { $push: { athletes: { athleteEmail, position: "" } } } // Push coachEmail to the coaches array
           );
 
           res.send(result);
@@ -489,10 +534,62 @@ async function run() {
     // });
 
     // add teams to db
-    app.post("/teams", verifyJWT, verifyAdmin, async (req, res) => {
+    app.post("/teams", verifyJWT, verifyAdminOrCoach, async (req, res) => {
       const data = req.body;
       const result = await teams.insertOne(data);
       res.send(result);
+    });
+
+    app.patch("/teams/team-position/:teamId", async (req, res) => {
+      const { teamId } = req.params;
+      const { position } = req.body;
+
+      try {
+        const updatedTeam = await teams.findOneAndUpdate(
+          { _id: new ObjectId(teamId) },
+          { $push: { positions: position } },
+          { new: true }
+        );
+
+        if (!updatedTeam) {
+          return res.status(404).json({ message: "Team not found" });
+        }
+
+        res.json(updatedTeam);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
+    });
+
+    app.patch("/teams/athlete-position/:teamId", async (req, res) => {
+      const { teamId } = req.params;
+      const { athleteEmail, position } = req.body;
+
+      console.log(teamId, athleteEmail, position);
+      try {
+        const filter = {
+          _id: new ObjectId(teamId),
+          "athletes.athleteEmail": athleteEmail,
+        };
+
+        const update = {
+          $set: {
+            "athletes.$.position": position,
+          },
+        };
+
+        const result = await teams.updateOne(filter, update);
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ message: "Team or athlete not found" });
+        }
+
+        res.json({ message: "Position updated successfully" });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Internal Server Error" });
+      }
     });
 
     // remove coach from a team
@@ -687,6 +784,7 @@ async function run() {
       // Emit the message to the relevant room (e.g., based on `to` and `from`)
       io.to(messageData.to).emit("newMessage", messageData);
 
+      console.log("HERE");
       res.send(response);
     });
 
