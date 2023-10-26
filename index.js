@@ -67,6 +67,7 @@ async function run() {
     const events = database.collection("events");
     const notifications = database.collection("notifications");
     const messages = database.collection("messages");
+    const plans = database.collection("plans");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -719,6 +720,78 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while deleting the event." });
+      }
+    });
+
+    //============ Planners ============
+    app.get("/plans/:coachEmail", verifyJWT, async (req, res) => {
+      try {
+        const coachEmail = req.params.coachEmail;
+        const result = await plans
+          .find({ coachEmail })
+          .sort({ _id: -1 })
+          .toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching plans:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching plans." });
+      }
+    });
+
+    app.post("/plans", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const planData = req.body;
+        const result = await plans.insertOne(planData);
+        res.json({
+          message: "Plan created successfully",
+          planId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error creating plan:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while creating the plan." });
+      }
+    });
+
+    app.patch("/plans/:id", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const updatedData = req.body;
+        const result = await plans.updateOne(
+          {
+            _id: new ObjectId(req.params.id),
+          },
+          {
+            $set: updatedData,
+          }
+        );
+        res.json({
+          message: "Plan updated successfully",
+          eventId: result.modifiedCount,
+        });
+      } catch (error) {
+        console.error("Error updating plan:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while updating the plan." });
+      }
+    });
+
+    app.delete("/plans/:id", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const result = await plans.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+        res.json({
+          message: "Plan deleted successfully",
+          eventId: result.deletedCount,
+        });
+      } catch (error) {
+        res
+          .status(500)
+          .json({ error: "An error occurred while deleting the plan." });
       }
     });
 
