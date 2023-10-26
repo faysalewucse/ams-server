@@ -152,6 +152,33 @@ async function run() {
       }
     });
 
+    // get all the organizations for super admin
+    app.get("/organizations", verifyJWT, verifySuperAdmin, async (req, res) => {
+      try {
+        const pipeline = [
+          {
+            $match: {
+              role: "admin",
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              organization: 1,
+              adminEmail: "$email",
+              adminName: { $concat: ["$firstName", " ", "$lastName"] },
+            },
+          },
+        ];
+        const result = await users.aggregate(pipeline).toArray();
+        res.send(result);
+      } catch (error) {
+        res
+          .status(500)
+          .send("An error has occurred while fetching organizations");
+      }
+    });
+
     app.patch("/users/change-profile-pic/:email", async (req, res) => {
       try {
         const userEmail = req.params.email;
