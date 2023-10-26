@@ -68,6 +68,7 @@ async function run() {
     const notifications = database.collection("notifications");
     const messages = database.collection("messages");
     const plans = database.collection("plans");
+    const trips = database.collection("trips");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -148,6 +149,33 @@ async function run() {
         res
           .status(500)
           .send({ error: "An error occurred while fetching user." });
+      }
+    });
+
+    // get all the organizations for super admin
+    app.get("/organizations", verifyJWT, verifySuperAdmin, async (req, res) => {
+      try {
+        const pipeline = [
+          {
+            $match: {
+              role: "admin",
+            },
+          },
+          {
+            $project: {
+              _id: 1,
+              organization: 1,
+              adminEmail: "$email",
+              adminName: { $concat: ["$firstName", " ", "$lastName"] },
+            },
+          },
+        ];
+        const result = await users.aggregate(pipeline).toArray();
+        res.send(result);
+      } catch (error) {
+        res
+          .status(500)
+          .send("An error has occurred while fetching organizations");
       }
     });
 
@@ -792,6 +820,77 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while deleting the plan." });
+      }
+    });
+    //============ Trip Planners ============
+    app.get("/trips/:coachEmail", verifyJWT, async (req, res) => {
+      try {
+        const coachEmail = req.params.coachEmail;
+        const result = await trips
+          .find({ coachEmail })
+          .sort({ _id: -1 })
+          .toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching trips:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching trips." });
+      }
+    });
+
+    app.post("/trips", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const tripData = req.body;
+        const result = await trips.insertOne(tripData);
+        res.json({
+          message: "Trips created successfully",
+          tripId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error creating trip:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while creating the trip." });
+      }
+    });
+
+    app.patch("/trips/:id", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const updatedData = req.body;
+        const result = await trips.updateOne(
+          {
+            _id: new ObjectId(req.params.id),
+          },
+          {
+            $set: updatedData,
+          }
+        );
+        res.json({
+          message: "Trip updated successfully",
+          eventId: result.modifiedCount,
+        });
+      } catch (error) {
+        console.error("Error updating trip:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while updating the trip." });
+      }
+    });
+
+    app.delete("/trips/:id", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const result = await trips.deleteOne({
+          _id: new ObjectId(req.params.id),
+        });
+        res.json({
+          message: "Trips deleted successfully",
+          eventId: result.deletedCount,
+        });
+      } catch (error) {
+        res
+          .status(500)
+          .json({ error: "An error occurred while deleting the trip." });
       }
     });
 
