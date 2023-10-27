@@ -503,7 +503,53 @@ async function run() {
       res.send(result);
     });
 
-    // get all the teams with coach data also
+    // get all the teams for admin with coach data also
+    app.get("/teams/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const adminEmail = req.params.adminEmail;
+
+        // Use aggregation to fetch teams and populate coach data
+        const result = await teams
+          .aggregate([
+            {
+              $match: {
+                adminEmail: adminEmail,
+              },
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "coaches",
+                foreignField: "email",
+                as: "coachData",
+              },
+            },
+          ])
+          .toArray();
+
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching teams with coach data:", error);
+        res.status(500).send({
+          error: "An error occurred while fetching teams with coach data.",
+        });
+      }
+    });
+
+    // Get all teams for super admin
+    app.get("/teams", verifyJWT, verifySuperAdmin, async (req, res) => {
+      try {
+        const cursor = teams.find();
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching teams:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching teams." });
+      }
+    });
+
     app.get("/teams/:adminEmail", verifyJWT, async (req, res) => {
       try {
         const adminEmail = req.params.adminEmail;
