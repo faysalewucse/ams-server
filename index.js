@@ -4,6 +4,7 @@ const jwt = require("jsonwebtoken");
 const { verifyJWT } = require("./middleware/verifyJWT");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { Server } = require("socket.io");
+const upload = require("./middleware/upload");
 
 require("dotenv").config();
 
@@ -595,19 +596,6 @@ async function run() {
       }
     });
 
-    // // get teams for specific coaches
-    // app.get("/teams/athlete-team/:coachEmail", verifyJWT, async (req, res) => {
-    //   try {
-    //     const coachEmail = req.params.coachEmail;
-    //     const result = await teams
-    //       .find({ coaches: { $in: [coachEmail] } })
-    //       .toArray();
-    //     res.send(result);
-    //   } catch (error) {
-    //     res.status(500).send({ error: "An error has occurred" });
-    //   }
-    // });
-
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdminOrCoach, async (req, res) => {
       const data = req.body;
@@ -797,6 +785,26 @@ async function run() {
       }
     });
 
+    app.post(
+      "/event/add-participants/:eventId",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        const eventId = req.params.eventId;
+        const participantEmails = req.body;
+
+        const result = await events.updateOne(
+          { _id: new ObjectId(eventId) },
+          { $set: { participants: { $each: participantEmails } } }
+        );
+
+        if (result.modifiedCount === 0) {
+          return res.status(404).json({ message: "Event not found" });
+        }
+
+        res.status(200).json({ message: "Participants added successfully" });
+      }
+    );
     //============ Planners ============
     app.get("/plans/:coachEmail", verifyJWT, async (req, res) => {
       try {
@@ -996,14 +1004,16 @@ async function run() {
     app.post("/message", verifyJWT, async (req, res) => {
       const messageData = req.body;
 
-      // Insert the message into the MongoDB collection
       const response = await messages.insertOne(messageData);
-
-      // Emit the message to the relevant room (e.g., based on `to` and `from`)
       io.to(messageData.to).emit("newMessage", messageData);
 
-      console.log("HERE");
       res.send(response);
+    });
+
+    // ============ Files =============
+    // POST endpoint to handle file uploads
+    app.post("/upload", verifyJWT, upload.single("file"), (req, res) => {
+      res.status(200).json({ message: "File uploaded successfully" });
     });
 
     // Send a ping to confirm a successful connection
