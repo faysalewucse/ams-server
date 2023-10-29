@@ -128,7 +128,7 @@ async function run() {
     // users
 
     // Get all users for super admin
-    app.get("/users", verifyJWT, verifySuperAdmin, async (req, res) => {
+    app.get("/users", verifyJWT, async (req, res) => {
       try {
         const cursor = users.find();
         const result = await cursor.toArray();
@@ -201,7 +201,6 @@ async function run() {
     app.get(
       "/users/coach-athlete-parents/:adminEmail",
       verifyJWT,
-      verifyAdmin,
       async (req, res) => {
         try {
           const adminEmail = req.params.adminEmail;
@@ -248,29 +247,24 @@ async function run() {
     );
 
     // get all users for parent
-    app.get(
-      "/users/athlete/:parentsEmail",
-      verifyJWT,
-      verifyAdmin,
-      async (req, res) => {
-        try {
-          const parentsEmail = req.params.parentsEmail;
+    app.get("/users/athlete/:parentsEmail", verifyJWT, async (req, res) => {
+      try {
+        const parentsEmail = req.params.parentsEmail;
 
-          const cursor = users.find({
-            role: { $in: ["athlete"] },
-            parentsEmail: parentsEmail,
-          });
-          const result = await cursor.toArray();
+        const cursor = users.find({
+          role: { $in: ["athlete"] },
+          parentsEmail: parentsEmail,
+        });
+        const result = await cursor.toArray();
 
-          res.send(result);
-        } catch (error) {
-          console.error("Error fetching users:", error);
-          res
-            .status(500)
-            .send({ error: "An error occurred while fetching users." });
-        }
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching users." });
       }
-    );
+    });
 
     app.get("/users/byRole", verifyJWT, async (req, res) => {
       try {
@@ -505,7 +499,7 @@ async function run() {
     });
 
     // get all the teams for admin with coach data also
-    app.get("/teams/:adminEmail", verifyJWT, async (req, res) => {
+    app.get("/teams/:adminEmail", async (req, res) => {
       try {
         const adminEmail = req.params.adminEmail;
 
@@ -596,6 +590,29 @@ async function run() {
       }
     });
 
+    // get teams for specific athletes
+    app.get(
+      "/teams/athlete-team/:athleteEmail",
+      verifyJWT,
+      async (req, res) => {
+        console.log(req.params.athleteEmail);
+        try {
+          const athleteEmail = req.params.athleteEmail;
+          const result = await teams
+            .find({
+              athletes: {
+                $elemMatch: { athleteEmail: athleteEmail },
+              },
+            })
+            .toArray();
+
+          res.send(result);
+        } catch (error) {
+          res.status(500).send({ error: "An error has occurred" });
+        }
+      }
+    );
+
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdminOrCoach, async (req, res) => {
       const data = req.body;
@@ -677,18 +694,26 @@ async function run() {
     );
 
     // remove athlete from team
-    app.patch(
+    app.delete(
       "/teams/athlete/:athleteEmail",
       verifyJWT,
       verifyCoach,
       async (req, res) => {
         try {
           const athleteEmail = req.params.athleteEmail;
-          const teamId = req.query.team;
+          const teamId = req.query.teamId;
+
           const result = await teams.updateOne(
             { _id: new ObjectId(teamId) },
-            { $pull: { athletes: athleteEmail } }
+            {
+              $pull: {
+                athletes: {
+                  athleteEmail: athleteEmail,
+                },
+              },
+            }
           );
+
           res.send(result);
         } catch (error) {
           console.error(error.message);
@@ -726,7 +751,7 @@ async function run() {
       }
     });
 
-    app.post("/events", verifyJWT, verifyAdmin, async (req, res) => {
+    app.post("/events", verifyJWT, verifyCoach, async (req, res) => {
       try {
         const eventData = req.body;
 
@@ -791,11 +816,11 @@ async function run() {
       verifyCoach,
       async (req, res) => {
         const eventId = req.params.eventId;
-        const participantEmails = req.body;
+        const participants = req.body;
 
         const result = await events.updateOne(
           { _id: new ObjectId(eventId) },
-          { $set: { participants: { $each: participantEmails } } }
+          { $set: { participants: participants } }
         );
 
         if (result.modifiedCount === 0) {
@@ -985,6 +1010,24 @@ async function run() {
     });
 
     // =============== Message API ===============
+    app.get("/users/chat/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const cursor = users.find({
+          $or: [
+            { adminEmail: req.params.adminEmail },
+            { email: req.params.adminEmail },
+          ],
+        });
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching users:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching users." });
+      }
+    });
+
     app.get("/message", verifyJWT, async (req, res) => {
       const to = req.query.to;
       const from = req.query.from;
@@ -1012,7 +1055,7 @@ async function run() {
 
     // ============ Files =============
     // POST endpoint to handle file uploads
-    app.post("/upload", verifyJWT, upload.single("file"), (req, res) => {
+    app.post("/upload", verifyJWT, (req, res) => {
       res.status(200).json({ message: "File uploaded successfully" });
     });
 
