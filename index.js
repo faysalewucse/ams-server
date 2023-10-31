@@ -124,9 +124,6 @@ async function run() {
       next();
     };
 
-    // TODO: verify instructor remains
-    // users
-
     // Get all users for super admin
     app.get("/users", verifyJWT, async (req, res) => {
       try {
