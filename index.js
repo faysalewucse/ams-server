@@ -128,7 +128,7 @@ async function run() {
     // users
 
     // Get all users for super admin
-    app.get("/users", verifyJWT, async (req, res) => {
+    app.get("/users", async (req, res) => {
       try {
         const cursor = users.find();
         const result = await cursor.toArray();
