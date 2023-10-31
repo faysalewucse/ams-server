@@ -47,7 +47,6 @@ app.post("/jwt", (req, res) => {
 });
 
 const uri = process.env.MONGODB_URL;
-console.log(uri);
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
   serverApi: {
@@ -66,6 +65,7 @@ async function run() {
     const users = database.collection("users");
     const teams = database.collection("teams");
     const events = database.collection("events");
+    const tasks = database.collection("tasks");
     const notifications = database.collection("notifications");
     const messages = database.collection("messages");
     const plans = database.collection("plans");
@@ -831,10 +831,35 @@ async function run() {
     app.get("/plans/:coachEmail", verifyJWT, async (req, res) => {
       try {
         const coachEmail = req.params.coachEmail;
+
+        // Perform an aggregation to join plans and tasks
         const result = await plans
-          .find({ coachEmail })
-          .sort({ _id: -1 })
+          .aggregate([
+            {
+              $match: {
+                coachEmail: coachEmail,
+              },
+            },
+            {
+              $lookup: {
+                from: "tasks",
+                let: { planId: { $toString: "$_id" } }, // Convert ObjectId to string
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$planId", "$$planId"] }, // Compare as strings
+                    },
+                  },
+                ],
+                as: "tasks",
+              },
+            },
+            {
+              $sort: { _id: -1 },
+            },
+          ])
           .toArray();
+
         res.json(result);
       } catch (error) {
         console.error("Error fetching plans:", error);
@@ -898,6 +923,25 @@ async function run() {
           .json({ error: "An error occurred while deleting the plan." });
       }
     });
+
+    // ============ Task ==============
+
+    app.post("/task", verifyJWT, verifyCoach, async (req, res) => {
+      try {
+        const taskData = req.body;
+        const result = await tasks.insertOne(taskData);
+        res.json({
+          message: "Task Added successfully",
+          planId: result.insertedId,
+        });
+      } catch (error) {
+        console.error("Error adding task:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while adding task to the plan." });
+      }
+    });
+
     //============ Trip Planners ============
     app.get("/trips/:coachEmail", verifyJWT, async (req, res) => {
       try {
