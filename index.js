@@ -70,6 +70,8 @@ async function run() {
     const messages = database.collection("messages");
     const plans = database.collection("plans");
     const trips = database.collection("trips");
+    const medicalInformations = database.collection("medicalInformations");
+    const performances = database.collection("performances");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -141,6 +143,20 @@ async function run() {
     app.get("/user/:email", verifyJWT, async (req, res) => {
       try {
         const result = await users.findOne({ email: req.params.email });
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching user." });
+      }
+    });
+
+    app.get("/user/byId/:userId", verifyJWT, async (req, res) => {
+      try {
+        const result = await users.findOne({
+          _id: new ObjectId(req.params.userId),
+        });
         res.send(result);
       } catch (error) {
         console.error("Error fetching user:", error);
@@ -1092,6 +1108,48 @@ async function run() {
       io.to(messageData.to).emit("newMessage", messageData);
 
       res.send(response);
+    });
+
+    // ============= Performances ===============
+    app.put("/performance", verifyJWT, async (req, res) => {
+      const performanceData = req.body;
+      const userEmail = performanceData.userEmail;
+
+      try {
+        const existingPerformance = await performances.findOne({ userEmail });
+
+        if (existingPerformance) {
+          // Update existing performance data
+          const updatedPerformance = await performances.findOneAndUpdate(
+            { userEmail },
+            { $set: performanceData },
+            { returnOriginal: false }
+          );
+
+          res.send(updatedPerformance.value); // Sending updated document
+        } else {
+          // Insert new performance data
+          const response = await performances.insertOne(performanceData);
+          res.send(response); // Sending newly inserted document
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).send("Server Error");
+      }
+    });
+
+    app.get("/performance/:userEmail", verifyJWT, async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+
+        const result = await performances.findOne({ userEmail });
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching performances:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching notification." });
+      }
     });
 
     // ============ Files =============
