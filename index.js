@@ -1148,10 +1148,53 @@ async function run() {
         console.error("Error fetching performances:", error);
         res
           .status(500)
-          .json({ error: "An error occurred while fetching notification." });
+          .json({ error: "An error occurred while fetching performance." });
       }
     });
 
+    // Medical Information
+    app.put("/medicalInfo", verifyJWT, async (req, res) => {
+      const medicalInfo = req.body;
+      const userEmail = medicalInfo.userEmail;
+
+      try {
+        const existingPerformance = await medicalInformations.findOne({
+          userEmail,
+        });
+
+        if (existingPerformance) {
+          // Update existing performance data
+          const updatedPerformance = await medicalInformations.findOneAndUpdate(
+            { userEmail },
+            { $set: medicalInfo },
+            { returnOriginal: false }
+          );
+
+          res.send(updatedPerformance.value); // Sending updated document
+        } else {
+          // Insert new performance data
+          const response = await medicalInformations.insertOne(medicalInfo);
+          res.send(response); // Sending newly inserted document
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).send("Server Error");
+      }
+    });
+
+    app.get("/medicalInfo/:userEmail", verifyJWT, async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+
+        const result = await medicalInformations.findOne({ userEmail });
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching medical info:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching medical info." });
+      }
+    });
     // ============ Files =============
     // POST endpoint to handle file uploads
     app.post("/upload", verifyJWT, (req, res) => {
