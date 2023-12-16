@@ -751,6 +751,8 @@ async function run() {
       try {
         const adminEmail = req.params.adminEmail;
 
+        console.log({ adminEmail });
+
         const result = await events
           .find({ adminEmail })
           .sort({ _id: -1 })
