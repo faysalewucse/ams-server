@@ -212,14 +212,14 @@ async function run() {
 
     // Get all users for admin
     app.get(
-      "/users/coach-athlete-parents/:adminEmail",
+      "/users/coach-sub_coach-athlete-parents/:adminEmail",
       verifyJWT,
       async (req, res) => {
         try {
           const adminEmail = req.params.adminEmail;
 
           const cursor = users.find({
-            role: { $in: ["coach", "athlete", "parents"] },
+            role: { $in: ["coach", "sub_coach", "athlete", "parents"] },
             adminEmail: adminEmail,
           });
           const result = await cursor.toArray();
