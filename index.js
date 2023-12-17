@@ -385,6 +385,7 @@ async function run() {
       res.send(result);
     });
 
+    // change user role
     app.patch(
       "/changeUserRole/:userEmail",
       verifyJWT,
@@ -396,6 +397,24 @@ async function run() {
         const result = await users.updateOne(
           { email: userEmail },
           { $set: { role: newRole } }
+        );
+
+        res.send(result);
+      }
+    );
+
+    // change sub coach title
+    app.patch(
+      "/change-title/:userEmail",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        const userEmail = req.params.userEmail;
+        const newTitle = req.query.newTitle;
+
+        const result = await users.updateOne(
+          { email: userEmail },
+          { $set: { title: newTitle } }
         );
 
         res.send(result);
@@ -1155,34 +1174,51 @@ async function run() {
     });
 
     // Medical Information
-    app.put("/medicalInfo", verifyJWT, async (req, res) => {
-      const medicalInfo = req.body;
-      const userEmail = medicalInfo.userEmail;
+    app.put(
+      "/medicalInfo/allergies/:userEmail",
+      verifyJWT,
+      async (req, res) => {
+        const allergies = req.body;
+        const userEmail = req.params.userEmail;
 
-      try {
-        const existingPerformance = await medicalInformations.findOne({
-          userEmail,
-        });
-
-        if (existingPerformance) {
-          // Update existing performance data
-          const updatedPerformance = await medicalInformations.findOneAndUpdate(
+        try {
+          const updatedAllergies = await medicalInformations.findOneAndUpdate(
             { userEmail },
-            { $set: medicalInfo },
+            { $set: { allergies: allergies } },
             { returnOriginal: false }
           );
 
-          res.send(updatedPerformance.value); // Sending updated document
-        } else {
-          // Insert new performance data
-          const response = await medicalInformations.insertOne(medicalInfo);
-          res.send(response); // Sending newly inserted document
+          res.send(updatedAllergies.value);
+        } catch (error) {
+          console.error("Error:", error);
+          res.status(500).send("Server Error");
         }
-      } catch (error) {
-        console.error("Error:", error);
-        res.status(500).send("Server Error");
       }
-    });
+    );
+
+    // Update pastInjuries for a specific user
+    app.put(
+      "/medicalInfo/pastInjuries/:userEmail",
+      verifyJWT,
+      async (req, res) => {
+        const pastInjuries = req.body;
+        const userEmail = req.params.userEmail;
+
+        try {
+          const updatedPastInjuries =
+            await medicalInformations.findOneAndUpdate(
+              { userEmail },
+              { $set: { pastInjuries: pastInjuries } },
+              { returnOriginal: false }
+            );
+
+          res.send(updatedPastInjuries.value);
+        } catch (error) {
+          console.error("Error:", error);
+          res.status(500).send("Server Error");
+        }
+      }
+    );
 
     app.get("/medicalInfo/:userEmail", verifyJWT, async (req, res) => {
       try {

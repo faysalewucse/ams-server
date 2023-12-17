@@ -11,13 +11,18 @@ const verifyJWT = (req, res, next) => {
 
   const token = authorization.split(" ")[1];
 
-  jwt.verify(token, process.env.JWT_SECRET_KEY, (err, decoded) => {
-    if (err) {
-      return res.status(401).send({ error: true, message: err.message });
+  jwt.verify(
+    token,
+    process.env.JWT_SECRET_KEY,
+    { expiresIn: "10m" },
+    (err, decoded) => {
+      if (err) {
+        return res.status(401).send({ error: true, message: err.message });
+      }
+      req.decoded = decoded;
+      next();
     }
-    req.decoded = decoded;
-    next();
-  });
+  );
 };
 
 module.exports = { verifyJWT };
