@@ -74,6 +74,7 @@ async function run() {
     const trips = database.collection("trips");
     const medicalInformations = database.collection("medicalInformations");
     const performances = database.collection("performances");
+    const formLibrary = database.collection("formLibrary");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -290,9 +291,9 @@ async function run() {
         const parentsEmail = req.query.parentsEmail || "";
 
         let matchWith = { role: roleToFind };
-        // if (adminEmail !== "joseph@gmail.com" && !parentsEmail) {
-        //   matchWith.adminEmail = adminEmail;
-        // }
+        if (adminEmail !== "joseph@gmail.com" && !parentsEmail) {
+          matchWith.adminEmail = adminEmail;
+        }
 
         if (roleToFind === "athlete" && parentsEmail) {
           console.log("Here");
@@ -1238,6 +1239,9 @@ async function run() {
       }
     });
 
+    // ============ Files =============
+    // POST endpoint to handle file uploads
+
     const storage = multer.diskStorage({});
 
     const upload = multer({ storage });
@@ -1247,11 +1251,34 @@ async function run() {
       api_key: process.env.CLOUDINARY_API_KEY,
       api_secret: process.env.CLOUDINARY_API_SECRET,
     });
-    // ============ Files =============
-    // POST endpoint to handle file uploads
-    app.post("/upload", verifyJWT, (req, res) => {
-      res.status(200).json({ message: "File uploaded successfully" });
-    });
+
+    app.post(
+      "/upload-form",
+      verifyJWT,
+      upload.single("formFile"),
+      async (req, res) => {
+        try {
+          if (!req?.file?.path) {
+            return res.status(400).json({ error: "No file uploaded" });
+          }
+
+          const { ...bodyData } = req.body;
+          const cloudinaryResult = await cloudinary.uploader.upload(
+            req.file.path
+          );
+
+          const formUrl = cloudinaryResult.secure_url;
+          bodyData.formFile = formUrl;
+          console.log(formUrl, req.body);
+
+          const result = await formLibrary.insertOne(bodyData);
+          res.send(result);
+        } catch (err) {
+          console.error(err);
+          res.status(500).json({ error: "Something went wrong" });
+        }
+      }
+    );
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
