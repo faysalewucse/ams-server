@@ -4,7 +4,9 @@ const jwt = require("jsonwebtoken");
 const { verifyJWT } = require("./middleware/verifyJWT");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { Server } = require("socket.io");
-const upload = require("./middleware/upload");
+// const upload = require("./middleware/upload");
+const multer = require("multer");
+const cloudinary = require("cloudinary").v2;
 
 require("dotenv").config();
 
@@ -288,9 +290,9 @@ async function run() {
         const parentsEmail = req.query.parentsEmail || "";
 
         let matchWith = { role: roleToFind };
-        if (adminEmail !== "joseph@gmail.com" && !parentsEmail) {
-          matchWith.adminEmail = adminEmail;
-        }
+        // if (adminEmail !== "joseph@gmail.com" && !parentsEmail) {
+        //   matchWith.adminEmail = adminEmail;
+        // }
 
         if (roleToFind === "athlete" && parentsEmail) {
           console.log("Here");
@@ -613,9 +615,11 @@ async function run() {
     app.get("/teams/coach-team/:coachEmail", verifyJWT, async (req, res) => {
       try {
         const coachEmail = req.params.coachEmail;
+
         const result = await teams
           .find({ coaches: { $in: [coachEmail] } })
           .toArray();
+
         res.send(result);
       } catch (error) {
         res.status(500).send({ error: "An error has occurred" });
@@ -1232,6 +1236,16 @@ async function run() {
           .status(500)
           .json({ error: "An error occurred while fetching medical info." });
       }
+    });
+
+    const storage = multer.diskStorage({});
+
+    const upload = multer({ storage });
+
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET,
     });
     // ============ Files =============
     // POST endpoint to handle file uploads
