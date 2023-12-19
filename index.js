@@ -1269,7 +1269,7 @@ async function run() {
 
           const formUrl = cloudinaryResult.secure_url;
           bodyData.formFile = formUrl;
-          console.log(formUrl, req.body);
+          bodyData.addedBy = JSON.parse(bodyData.addedBy);
 
           const result = await formLibrary.insertOne(bodyData);
           res.send(result);
