@@ -1242,13 +1242,28 @@ async function run() {
     app.get("/forms", async (req, res) => {
       try {
         const email = req.query.addedBy;
+        const isArchived = req.query.isArchived;
 
-        const result = await formLibrary
-          .find({
+        let query;
+        if (isArchived == "true" && email) {
+          query = {
+            "addedBy.email": email,
+            $and: [{ isArchived: true }],
+          };
+        } else if (isArchived == "false" && email) {
+          query = {
             "addedBy.email": email,
             $or: [{ isArchived: { $exists: false } }, { isArchived: false }],
-          })
-          .toArray();
+          };
+        } else if (email) {
+          query = {
+            "addedBy.email": email,
+          };
+        } else {
+          query = {};
+        }
+
+        const result = await formLibrary.find(query).toArray();
 
         if (result) {
           res.json(result);
