@@ -1244,7 +1244,10 @@ async function run() {
         const email = req.query.addedBy;
 
         const result = await formLibrary
-          .find({ "addedBy.email": email })
+          .find({
+            "addedBy.email": email,
+            $or: [{ isArchived: { $exists: false } }, { isArchived: false }],
+          })
           .toArray();
 
         if (result) {
