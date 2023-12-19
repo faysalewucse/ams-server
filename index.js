@@ -1239,6 +1239,46 @@ async function run() {
       }
     });
 
+    app.get("/forms", async (req, res) => {
+      try {
+        const email = req.query.addedBy;
+
+        const result = await formLibrary
+          .find({ "addedBy.email": email })
+          .toArray();
+
+        if (result) {
+          res.json(result);
+        } else {
+          res.status(404).json({ error: "Form not found" });
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.patch("/forms/:id", async (req, res) => {
+      try {
+        const formId = req.params.id;
+        const updateFields = req.body;
+
+        const result = await formLibrary.updateOne(
+          { _id: new ObjectId(formId) },
+          { $set: updateFields }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.json({ message: "Form updated successfully" });
+        } else {
+          res.status(404).json({ error: "Form not found" });
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
     // ============ Files =============
     // POST endpoint to handle file uploads
 
