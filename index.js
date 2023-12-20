@@ -75,6 +75,7 @@ async function run() {
     const messages = database.collection("messages");
     const plans = database.collection("plans");
     const trips = database.collection("trips");
+    const customForms = database.collection("customForms");
     const medicalInformations = database.collection("medicalInformations");
     const performances = database.collection("performances");
     const formLibrary = database.collection("formLibrary");
@@ -1353,6 +1354,18 @@ async function run() {
       }
     );
 
+    // custom form upload
+    app.post("/upload-custom-form", verifyJWT, async (req, res) => {
+      try {
+        const formFields = req.body.fields;
+
+        const result = await users.insertOne(user);
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Something went wrong" });
+      }
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
