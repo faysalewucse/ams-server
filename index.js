@@ -7,6 +7,9 @@ const { Server } = require("socket.io");
 // const upload = require("./middleware/upload");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
+const storage = multer.diskStorage({});
+
+const upload = multer({ storage });
 
 require("dotenv").config();
 
@@ -1276,33 +1279,45 @@ async function run() {
       }
     });
 
-    app.patch("/forms/:id", async (req, res) => {
-      try {
-        const formId = req.params.id;
-        const updateFields = req.body;
+    app.patch(
+      "/forms/:id",
+      verifyJWT,
+      // upload.single("formFile"),
+      async (req, res) => {
+        try {
+          const formId = req.params.id;
+          const { ...updateFields } = req.body;
 
-        const result = await formLibrary.updateOne(
-          { _id: new ObjectId(formId) },
-          { $set: updateFields }
-        );
+          const result = await formLibrary.updateOne(
+            { _id: new ObjectId(formId) },
+            { $set: updateFields }
+          );
 
-        if (result.modifiedCount > 0) {
-          res.json({ message: "Form updated successfully" });
-        } else {
-          res.status(404).json({ error: "Form not found" });
+          if (result.modifiedCount > 0) {
+            res.json({ message: "Form updated successfully" });
+          } else {
+            res.status(404).json({ error: "Form not found" });
+          }
+        } catch (error) {
+          console.error("Error:", error);
+          res.status(500).json({ error: "Internal Server Error" });
         }
+      }
+    );
+
+    app.delete("/forms/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await formLibrary.deleteOne({ _id: new ObjectId(id) });
+        res.send(result);
       } catch (error) {
-        console.error("Error:", error);
-        res.status(500).json({ error: "Internal Server Error" });
+        console.error(error.message);
+        res.status(500).send("An error has occurred!");
       }
     });
 
     // ============ Files =============
     // POST endpoint to handle file uploads
-
-    const storage = multer.diskStorage({});
-
-    const upload = multer({ storage });
 
     cloudinary.config({
       cloud_name: process.env.CLOUDINARY_NAME,
