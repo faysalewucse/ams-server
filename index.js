@@ -107,11 +107,9 @@ async function run() {
 
     const verifyAdminOrCoach = async (req, res, next) => {
       const email = req.decoded.email;
-      console.log(email);
       const query = { email: email };
       const user = await users.findOne(query);
 
-      console.log(user);
       if (user?.role !== "admin" && user?.role !== "coach") {
         return res
           .status(403)
@@ -300,9 +298,7 @@ async function run() {
         }
 
         if (roleToFind === "athlete" && parentsEmail) {
-          console.log("Here");
           matchWith.parentsEmail = parentsEmail;
-          console.log({ matchWith });
           const cursor = users.find(matchWith);
 
           const result = await cursor.toArray();
@@ -636,7 +632,6 @@ async function run() {
       "/teams/athlete-team/:athleteEmail",
       verifyJWT,
       async (req, res) => {
-        console.log(req.params.athleteEmail);
         try {
           const athleteEmail = req.params.athleteEmail;
           const result = await teams
@@ -687,7 +682,6 @@ async function run() {
       const { teamId } = req.params;
       const { athleteEmail, position } = req.body;
 
-      console.log(teamId, athleteEmail, position);
       try {
         const filter = {
           _id: new ObjectId(teamId),
@@ -779,8 +773,6 @@ async function run() {
       try {
         const adminEmail = req.params.adminEmail;
 
-        console.log({ adminEmail });
-
         const result = await events
           .find({ adminEmail })
           .sort({ _id: -1 })
@@ -797,8 +789,6 @@ async function run() {
     app.post("/events", verifyJWT, verifyCoach, async (req, res) => {
       try {
         const eventData = req.body;
-
-        console.log(eventData);
 
         const result = await events.insertOne(eventData);
 
@@ -1326,6 +1316,20 @@ async function run() {
       api_secret: process.env.CLOUDINARY_API_SECRET,
     });
 
+    // Forms
+    app.get("/pdf-forms/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const adminEmail = req.params.adminEmail;
+
+        const cursor = formLibrary.find({ adminEmail: adminEmail });
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Something went wrong" });
+      }
+    });
+
     app.post(
       "/upload-form",
       verifyJWT,
@@ -1354,18 +1358,32 @@ async function run() {
       }
     );
 
-    // custom form upload
-    app.post("/upload-custom-form", verifyJWT, async (req, res) => {
+    // custom forms
+    app.get("/custom-forms/:adminEmail", verifyJWT, async (req, res) => {
       try {
-        const formFields = req.body.fields;
+        const adminEmail = req.params.adminEmail;
 
-        const result = await users.insertOne(user);
+        const cursor = customForms.find({ adminEmail: adminEmail });
+        const result = await cursor.toArray();
         res.send(result);
       } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
+
+    app.post("/upload-custom-form", verifyJWT, async (req, res) => {
+      try {
+        const formData = req.body;
+
+        const result = await customForms.insertOne(formData);
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Something went wrong" });
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
