@@ -1384,6 +1384,38 @@ async function run() {
       }
     });
 
+    app.patch("/custom-form/:id", verifyJWT, async (req, res) => {
+      try {
+        const formId = req.params.id;
+        const { ...updateFields } = req.body;
+
+        const result = await customForms.updateOne(
+          { _id: new ObjectId(formId) },
+          { $set: updateFields }
+        );
+
+        if (result.modifiedCount > 0) {
+          res.json({ message: "Form updated successfully" });
+        } else {
+          res.status(404).json({ error: "Form not found" });
+        }
+      } catch (error) {
+        console.error("Error:", error);
+        res.status(500).json({ error: "Internal Server Error" });
+      }
+    });
+
+    app.delete("/custom-form/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await customForms.deleteOne({ _id: new ObjectId(id) });
+        res.send(result);
+      } catch (error) {
+        console.error(error.message);
+        res.status(500).send("An error has occurred!");
+      }
+    });
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
