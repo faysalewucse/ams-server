@@ -123,10 +123,10 @@ async function run() {
       const query = { email: email };
 
       const user = await users.findOne(query);
-      if (user?.role !== "coach") {
+      if (user?.role !== "coach" && user?.role !== "sub_coach") {
         return res
           .status(403)
-          .send({ error: true, message: "You are not a Coach" });
+          .send({ error: true, message: "You are not a Coach/Sub Coach" });
       }
       next();
     };
@@ -247,12 +247,18 @@ async function run() {
       async (req, res) => {
         try {
           const adminEmail = req.params.adminEmail;
+          const role = req.query.role;
+
+          console.log(role);
 
           const cursor = users.find({
             role: { $in: ["athlete", "parents"] },
             adminEmail: adminEmail,
+            // role: role ? role : "coach",
           });
           const result = await cursor.toArray();
+
+          console.log(result);
 
           res.send(result);
         } catch (error) {
@@ -305,7 +311,9 @@ async function run() {
 
           res.send(result);
         } else if (
-          (roleToFind === "coach" || roleToFind === "athlete") &&
+          (roleToFind === "coach" ||
+            roleToFind === "sub_coach" ||
+            roleToFind === "athlete") &&
           teamCount !== 0
         ) {
           const coachesWithTeams = await users
@@ -318,7 +326,7 @@ async function run() {
                   from: "teams",
                   localField: "email",
                   foreignField:
-                    roleToFind === "coach"
+                    roleToFind === "coach" || roleToFind === "sub_coach"
                       ? "coaches"
                       : "athletes.athleteEmail",
                   as: "teams",
@@ -439,33 +447,28 @@ async function run() {
     // delete user
     app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
 
-    app.patch(
-      "/coach/assignTeam/:coachEmail",
-      verifyJWT,
-      verifyAdmin,
-      async (req, res) => {
-        const coachEmail = req.params.coachEmail;
-        const teamIds = req.body;
+    app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
+      const coachEmail = req.params.coachEmail;
+      const teamIds = req.body;
 
-        try {
-          // Convert teamIds from an array of strings to an array of ObjectIds
-          const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
+      try {
+        // Convert teamIds from an array of strings to an array of ObjectIds
+        const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
-          // Update the teams collection to push the coach's email
-          const result = await teams.updateMany(
-            { _id: { $in: teamObjectIds } }, // Match teams by their IDs
-            { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
-          );
+        // Update the teams collection to push the coach's email
+        const result = await teams.updateMany(
+          { _id: { $in: teamObjectIds } }, // Match teams by their IDs
+          { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
+        );
 
-          res.send(result);
-        } catch (error) {
-          console.error("Error assigning teams to coach:", error);
-          res.status(500).send({
-            error: "An error occurred while assigning teams to coach.",
-          });
-        }
+        res.send(result);
+      } catch (error) {
+        console.error("Error assigning teams to coach:", error);
+        res.status(500).send({
+          error: "An error occurred while assigning teams to coach.",
+        });
       }
-    );
+    });
 
     app.patch(
       "/athlete/assignTeam/:athleteEmail",
