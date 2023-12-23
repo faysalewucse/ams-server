@@ -1184,8 +1184,8 @@ async function run() {
         try {
           const updatedAllergies = await medicalInformations.findOneAndUpdate(
             { userEmail },
-            { $set: { allergies: allergies } },
-            { returnOriginal: false }
+            { $set: { allergies } },
+            { returnOriginal: false, upsert: true } // Set upsert to true for insert
           );
 
           res.send(updatedAllergies.value);
