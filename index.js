@@ -79,6 +79,7 @@ async function run() {
     const medicalInformations = database.collection("medicalInformations");
     const performances = database.collection("performances");
     const formLibrary = database.collection("formLibrary");
+    const filledForms = database.collection("filledForms");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -254,11 +255,8 @@ async function run() {
           const cursor = users.find({
             role: { $in: ["athlete", "parents"] },
             adminEmail: adminEmail,
-            // role: role ? role : "coach",
           });
           const result = await cursor.toArray();
-
-          console.log(result);
 
           res.send(result);
         } catch (error) {
@@ -1333,6 +1331,29 @@ async function run() {
       }
     });
 
+    // Filed Forms
+    app.get("/filled-forms/:userEmail", verifyJWT, async (req, res) => {
+      try {
+        const userEmail = req.params.userEmail;
+        const forCoach = req.query.forCoach;
+
+        let findBy = {
+          "addedBy.email": userEmail,
+        };
+        if (forCoach) {
+          findBy = { adminEmail: userEmail };
+        }
+
+        const cursor = filledForms.find(findBy);
+
+        const result = await cursor.toArray();
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Something went wrong" });
+      }
+    });
+
     app.post(
       "/upload-form",
       verifyJWT,
@@ -1353,6 +1374,43 @@ async function run() {
           bodyData.addedBy = JSON.parse(bodyData.addedBy);
 
           const result = await formLibrary.insertOne(bodyData);
+          res.send(result);
+        } catch (err) {
+          console.error(err);
+          res.status(500).json({ error: "Something went wrong" });
+        }
+      }
+    );
+
+    app.post(
+      "/upload-filled-form/:formId",
+      verifyJWT,
+      upload.single("formFile"),
+      async (req, res) => {
+        try {
+          if (!req?.file?.path) {
+            return res.status(400).json({ error: "No file uploaded" });
+          }
+
+          const { ...bodyData } = req.body;
+          const cloudinaryResult = await cloudinary.uploader.upload(
+            req.file.path
+          );
+
+          const formUrl = cloudinaryResult.secure_url;
+          bodyData.formFile = formUrl;
+          bodyData.addedBy = JSON.parse(bodyData.addedBy);
+
+          const formId = req.params.formId;
+
+          const query = { formId };
+          const options = { upsert: true, returnOriginal: false };
+
+          const result = await filledForms.findOneAndUpdate(
+            query,
+            { $set: bodyData },
+            options
+          );
           res.send(result);
         } catch (err) {
           console.error(err);
