@@ -132,6 +132,28 @@ async function run() {
       next();
     };
 
+    // all coaches including sub coaches
+    app.get("/users/coaches/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const adminEmail = req.params.adminEmail;
+
+        console.log(adminEmail);
+        const coaches = await users
+          .find({
+            role: { $in: ["coach", "sub_coach"] },
+            adminEmail: adminEmail,
+          })
+          .toArray();
+
+        res.json(coaches);
+      } catch (error) {
+        console.error("Error fetching coach or sub_coach users:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching users." });
+      }
+    });
+
     // Get all users for super admin
     app.get("/users", verifyJWT, async (req, res) => {
       try {
@@ -775,9 +797,30 @@ async function run() {
         const adminEmail = req.params.adminEmail;
 
         const result = await events
-          .find({ adminEmail })
-          .sort({ _id: -1 })
+          .aggregate([
+            {
+              $match: { adminEmail }, // Match events by adminEmail
+            },
+            {
+              $lookup: {
+                from: "teams", // Lookup teams collection
+                let: { teamId: { $toObjectId: "$teamId" } }, // Convert teamId to ObjectId
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: { $eq: ["$_id", "$$teamId"] }, // Match by ObjectId
+                    },
+                  },
+                ],
+                as: "teamDetails", // Alias for the joined data
+              },
+            },
+            {
+              $sort: { _id: -1 }, // Sort the results if needed
+            },
+          ])
           .toArray();
+
         res.json(result);
       } catch (error) {
         console.error("Error fetching events:", error);
@@ -869,7 +912,6 @@ async function run() {
       try {
         const coachEmail = req.params.coachEmail;
 
-        // Perform an aggregation to join plans and tasks
         const result = await plans
           .aggregate([
             {
@@ -880,16 +922,32 @@ async function run() {
             {
               $lookup: {
                 from: "tasks",
-                let: { planId: { $toString: "$_id" } }, // Convert ObjectId to string
+                let: { planId: { $toString: "$_id" } },
                 pipeline: [
                   {
                     $match: {
-                      $expr: { $eq: ["$planId", "$$planId"] }, // Compare as strings
+                      $expr: { $eq: ["$planId", "$$planId"] },
                     },
                   },
                 ],
                 as: "tasks",
               },
+            },
+            {
+              $addFields: {
+                teamIdObj: { $toObjectId: "$teamId" }, // Convert teamId to ObjectId
+              },
+            },
+            {
+              $lookup: {
+                from: "teams",
+                localField: "teamIdObj",
+                foreignField: "_id",
+                as: "teamDetails",
+              },
+            },
+            {
+              $unset: "teamIdObj", // Remove temporary field
             },
             {
               $sort: { _id: -1 },
