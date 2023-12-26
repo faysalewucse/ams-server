@@ -46,7 +46,7 @@ app.get("/", (req, res) => {
 app.post("/jwt", (req, res) => {
   const user = req.body;
   const token = jwt.sign(user, process.env.JWT_SECRET_KEY, {
-    expiresIn: "10h",
+    expiresIn: "10m",
   });
   res.send({ token });
 });
