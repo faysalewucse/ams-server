@@ -417,6 +417,7 @@ async function run() {
       const user = req.body;
 
       const existingUser = await users.findOne({ email: user.email });
+      console.log({ existingUser });
       if (existingUser) {
         return res
           .status(400)
@@ -563,6 +564,18 @@ async function run() {
       const result = await users.updateOne(
         { _id: new ObjectId(id) },
         { $set: { status: updatedStatus } }
+      );
+      res.send(result);
+    });
+
+    app.patch("/user/update/isverified", async (req, res) => {
+      const email = req.body.email;
+
+      console.log({ email });
+
+      const result = await users.updateOne(
+        { email },
+        { $set: { isVerified: true } }
       );
       res.send(result);
     });
