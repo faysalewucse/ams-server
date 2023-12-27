@@ -179,6 +179,17 @@ async function run() {
           .send({ error: "An error occurred while fetching user." });
       }
     });
+    app.get("/user-exist/:email", async (req, res) => {
+      try {
+        const result = await users.findOne({ email: req.params.email });
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching user:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching user." });
+      }
+    });
 
     app.get("/user/byId/:userId", verifyJWT, async (req, res) => {
       try {
