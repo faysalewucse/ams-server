@@ -601,7 +601,7 @@ async function run() {
     });
 
     // Get all teams for super admin
-    app.get("/teams", verifyJWT, verifySuperAdmin, async (req, res) => {
+    app.get("/teams", verifyJWT, async (req, res) => {
       try {
         const cursor = teams.find();
         const result = await cursor.toArray();
@@ -813,17 +813,35 @@ async function run() {
               $match: { adminEmail }, // Match events by adminEmail
             },
             {
+              $addFields: {
+                isAllTeam: { $eq: ["$teamId", "all"] }, // Add a flag to identify "all" teamId
+              },
+            },
+            {
               $lookup: {
-                from: "teams", // Lookup teams collection
-                let: { teamId: { $toObjectId: "$teamId" } }, // Convert teamId to ObjectId
+                from: "teams",
+                let: {
+                  teamId: {
+                    $cond: [
+                      { $eq: ["$isAllTeam", true] },
+                      null,
+                      { $toObjectId: "$teamId" },
+                    ],
+                  },
+                },
                 pipeline: [
                   {
                     $match: {
-                      $expr: { $eq: ["$_id", "$$teamId"] }, // Match by ObjectId
+                      $expr: {
+                        $and: [
+                          { $eq: ["$_id", { $ifNull: ["$$teamId", "$_id"] }] }, // Match by ObjectId if not "all"
+                          { $ne: ["$teamId", "all"] }, // Skip if "all" teamId
+                        ],
+                      },
                     },
                   },
                 ],
-                as: "teamDetails", // Alias for the joined data
+                as: "teamDetails",
               },
             },
             {
