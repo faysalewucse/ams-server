@@ -408,8 +408,12 @@ async function run() {
     });
 
     app.get("/users/:userEmail", async (req, res) => {
+      console.log(req.params.userEmail);
+
       const userEmail = req.params.userEmail;
       const result = await users.findOne({ email: userEmail });
+      console.log(result);
+
       res.send(result);
     });
 
