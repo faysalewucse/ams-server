@@ -326,11 +326,14 @@ async function run() {
         const teamCount = await teams.countDocuments();
 
         const roleToFind = req.query.role || "";
+        const superAdmin = req.query.superAdmin || false;
         const adminEmail = req.query.adminEmail || "";
         const parentsEmail = req.query.parentsEmail || "";
 
+        console.log(superAdmin);
+        
         let matchWith = { role: roleToFind };
-        if (adminEmail !== "joseph@gmail.com" && !parentsEmail) {
+        if (!superAdmin && !parentsEmail) {
           matchWith.adminEmail = adminEmail;
         }
 
