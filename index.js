@@ -76,6 +76,7 @@ async function run() {
     const plans = database.collection("plans");
     const trips = database.collection("trips");
     const customForms = database.collection("customForms");
+    const filledCustomForms = database.collection("filledCustomForms");
     const medicalInformations = database.collection("medicalInformations");
     const performances = database.collection("performances");
     const formLibrary = database.collection("formLibrary");
@@ -331,7 +332,7 @@ async function run() {
         const parentsEmail = req.query.parentsEmail || "";
 
         console.log(superAdmin);
-        
+
         let matchWith = { role: roleToFind };
         if (!superAdmin && !parentsEmail) {
           matchWith.adminEmail = adminEmail;
@@ -1462,6 +1463,30 @@ async function run() {
     });
 
     app.post(
+      "/upload-file",
+      verifyJWT,
+      upload.single("formFile"),
+      async (req, res) => {
+        console.log("Bari khay");
+        try {
+          if (!req?.file?.path) {
+            return res.status(400).json({ error: "No file uploaded" });
+          }
+
+          const cloudinaryResult = await cloudinary.uploader.upload(
+            req.file.path
+          );
+
+          const formUrl = cloudinaryResult.secure_url;
+          res.send({ formUrl });
+        } catch (err) {
+          console.error(err);
+          res.status(500).json({ error: "Something went wrong" });
+        }
+      }
+    );
+
+    app.post(
       "/upload-form",
       verifyJWT,
       upload.single("formFile"),
@@ -1539,6 +1564,23 @@ async function run() {
         res.status(500).json({ error: "Something went wrong" });
       }
     });
+
+    app.get(
+      "/upload-filled-custom-form/:userEmail",
+      verifyJWT,
+      async (req, res) => {
+        try {
+          const userEmail = req.params.userEmail;
+
+          const cursor = customForms.find({ adminEmail: adminEmail });
+          const result = await cursor.toArray();
+          res.send(result);
+        } catch (err) {
+          console.error(err);
+          res.status(500).json({ error: "Something went wrong" });
+        }
+      }
+    );
 
     app.post("/upload-custom-form", verifyJWT, async (req, res) => {
       try {
