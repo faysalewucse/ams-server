@@ -1478,6 +1478,7 @@ async function run() {
           );
 
           const formUrl = cloudinaryResult.secure_url;
+          console.log(formUrl);
           res.send({ formUrl });
         } catch (err) {
           console.error(err);
@@ -1565,28 +1566,24 @@ async function run() {
       }
     });
 
-    app.get(
-      "/upload-filled-custom-form/:userEmail",
-      verifyJWT,
-      async (req, res) => {
-        try {
-          const userEmail = req.params.userEmail;
-
-          const cursor = customForms.find({ adminEmail: adminEmail });
-          const result = await cursor.toArray();
-          res.send(result);
-        } catch (err) {
-          console.error(err);
-          res.status(500).json({ error: "Something went wrong" });
-        }
-      }
-    );
-
     app.post("/upload-custom-form", verifyJWT, async (req, res) => {
       try {
         const formData = req.body;
 
         const result = await customForms.insertOne(formData);
+        res.send(result);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Something went wrong" });
+      }
+    });
+
+    app.post("/upload-filled-custom-form", verifyJWT, async (req, res) => {
+      try {
+        const formData = req.body;
+
+        console.log(formData);
+        const result = await filledCustomForms.insertOne(formData);
         res.send(result);
       } catch (err) {
         console.error(err);
