@@ -979,6 +979,14 @@ async function run() {
                       $expr: { $eq: ["$planId", "$$planId"] },
                     },
                   },
+                  {
+                    $lookup: {
+                      from: "users",
+                      localField: "assigne",
+                      foreignField: "email",
+                      as: "coachDetails",
+                    },
+                  },
                 ],
                 as: "tasks",
               },
