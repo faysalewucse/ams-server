@@ -8,6 +8,9 @@ const { Server } = require("socket.io");
 const multer = require("multer");
 const cloudinary = require("cloudinary").v2;
 const storage = multer.diskStorage({});
+const stripe = require("stripe")(
+  "sk_test_51OQ16rFd3jBtA0ChSF8R9j0LkJIGspNDvSlPFQlW6PvANqX08W6RuEsZ9NDq802aw2QIUsHnW0ZbVvMENdAD54CN00zbqNErkK"
+);
 
 const upload = multer({ storage });
 
@@ -49,6 +52,75 @@ app.post("/jwt", (req, res) => {
     expiresIn: "10m",
   });
   res.send({ token });
+});
+
+// 2 Year
+// bp8hmRR2
+
+// 1year
+// IPEayMb5
+
+app.post("/create-checkout-session", async (req, res) => {
+  const { priceId, metadata } = req.body;
+  console.log(priceId, metadata);
+
+  let discountRate =
+    metadata.productName === "1 year"
+      ? 10
+      : metadata.productName === "2 Year"
+      ? 20
+      : 0;
+
+  console.log({ discountRate });
+
+  let coupon;
+
+  if (metadata.productName !== "monthly") {
+    coupon = await stripe.coupons.create({
+      percent_off: discountRate,
+      duration: "once",
+    });
+  }
+
+  // let coupon = "";
+  // if (metadata.productName === "1 year") {
+  //   coupon = "IPEayMb5";
+  // } else if (metadata.productName === "2 Year") {
+  //   coupon = "bp8hmRR2";
+  // }
+
+  try {
+    const sessionConfig = {
+      payment_method_types: ["card"],
+
+      line_items: [
+        {
+          price: priceId,
+          quantity: metadata.teams,
+        },
+      ],
+      mode: "subscription",
+      customer_email: metadata.email,
+      success_url: "http://localhost:5173/dashboard",
+      cancel_url: "http://localhost:5173",
+      metadata: metadata || {},
+    };
+
+    if (
+      metadata.productName === "1 year" ||
+      metadata.productName === "2 Year"
+    ) {
+      sessionConfig.discounts = [{ coupon: coupon.id }];
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
+    console.log({ session });
+
+    res.json({ url: session.url });
+  } catch (error) {
+    console.error("Error creating checkout session:", error);
+    res.status(500).send("Internal Server Error");
+  }
 });
 
 const uri = process.env.MONGODB_URL;
