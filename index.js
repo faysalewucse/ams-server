@@ -28,7 +28,7 @@ const server = app.listen(port, () => {
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:5173",
+    origin: "http://localhost:3000",
     methods: ["GET", "POST"],
   },
 });
@@ -60,9 +60,65 @@ app.post("/jwt", (req, res) => {
 // 1year
 // IPEayMb5
 
+app.post(
+  "/webhook",
+  express.raw({ type: "application/json" }),
+  async (request, response) => {
+    const sig = request.headers["stripe-signature"];
+    let event;
+
+    try {
+      event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+    } catch (err) {
+      response.status(400).send(`Webhook Error: ${err.message}`);
+      return;
+    }
+
+    console.log("event.type", event.type);
+
+    // Handle the event
+    switch (event.type) {
+      case "checkout.session.completed":
+        const checkoutSessionCompleted = event.data.object;
+
+        console.log({ checkoutSessionCompleted });
+
+        break;
+
+      case "invoice.payment_succeeded":
+        const invoicePaymentSucceeded = event.data.object;
+
+        console.log({ invoicePaymentSucceeded });
+
+        break;
+
+      case "invoice.payment_failed":
+        const invoicePaymentFailed = event.data.object;
+
+        console.log({ invoicePaymentFailed });
+
+        break;
+
+      case "customer.subscription.deleted":
+        const subscriptionDeleted = event.data.object;
+        console.log({ subscriptionDeleted });
+
+      case "payment_intent.succeeded":
+        const paymentIntentSucceeded = event.data.object;
+        console.log({ paymentIntentSucceeded });
+
+        break;
+
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    response.send();
+  }
+);
+
 app.post("/create-checkout-session", async (req, res) => {
   const { priceId, metadata } = req.body;
-  console.log(priceId, metadata);
 
   let discountRate =
     metadata.productName === "1 year"
@@ -70,8 +126,6 @@ app.post("/create-checkout-session", async (req, res) => {
       : metadata.productName === "2 Year"
       ? 20
       : 0;
-
-  console.log({ discountRate });
 
   let coupon;
 
@@ -101,8 +155,8 @@ app.post("/create-checkout-session", async (req, res) => {
       ],
       mode: "subscription",
       customer_email: metadata.email,
-      success_url: "http://localhost:5173/dashboard",
-      cancel_url: "http://localhost:5173",
+      success_url: "http://localhost:3000/dashboard",
+      cancel_url: "http://localhost:3000",
       metadata: metadata || {},
     };
 
@@ -114,7 +168,6 @@ app.post("/create-checkout-session", async (req, res) => {
     }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
-    console.log({ session });
 
     res.json({ url: session.url });
   } catch (error) {
