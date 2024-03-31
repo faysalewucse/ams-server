@@ -18,7 +18,6 @@ require("dotenv").config();
 
 const app = express();
 app.use(cors());
-app.use(express.json());
 
 const port = process.env.PORT || 5000;
 
@@ -45,30 +44,53 @@ io.on("connection", (socket) => {
 app.get("/", (req, res) => {
   res.send("AMS Server is running.");
 });
-
-app.post("/jwt", (req, res) => {
-  const user = req.body;
-  const token = jwt.sign(user, process.env.JWT_SECRET_KEY, {
-    expiresIn: "10m",
-  });
-  res.send({ token });
-});
-
 // 2 Year
 // bp8hmRR2
 
 // 1year
 // IPEayMb5
 
+const uri = process.env.MONGODB_URL;
+// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+const client = new MongoClient(uri, {
+  serverApi: {
+    version: ServerApiVersion.v1,
+    strict: true,
+    deprecationErrors: true,
+  },
+});
+
+client.connect();
+
+const database = client.db("overtimeDB");
+const users = database.collection("users");
+const teams = database.collection("teams");
+const events = database.collection("events");
+const tasks = database.collection("tasks");
+const notifications = database.collection("notifications");
+const messages = database.collection("messages");
+const plans = database.collection("plans");
+const trips = database.collection("trips");
+const customForms = database.collection("customForms");
+const filledCustomForms = database.collection("filledCustomForms");
+const medicalInformations = database.collection("medicalInformations");
+const performances = database.collection("performances");
+const formLibrary = database.collection("formLibrary");
+const filledForms = database.collection("filledForms");
+
 app.post(
-  "/webhook",
+  "/webhooks",
   express.raw({ type: "application/json" }),
   async (request, response) => {
     const sig = request.headers["stripe-signature"];
     let event;
 
     try {
-      event = stripe.webhooks.constructEvent(request.body, sig, endpointSecret);
+      event = stripe.webhooks.constructEvent(
+        request.body,
+        sig,
+        "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
+      );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
       return;
@@ -76,38 +98,53 @@ app.post(
 
     console.log("event.type", event.type);
 
-    // Handle the event
     switch (event.type) {
       case "checkout.session.completed":
         const checkoutSessionCompleted = event.data.object;
 
-        console.log({ checkoutSessionCompleted });
+        const userEmaill = checkoutSessionCompleted.customer_email;
+        const customer_id = checkoutSessionCompleted.customer;
+
+        const amount_total = checkoutSessionCompleted.amount_total / 100;
+
+        const result = await users.updateOne(
+          { email: userEmaill },
+          {
+            $set: {
+              amount_paid: amount_total,
+              customer_id: customer_id || "",
+              isSubscribed: true,
+            },
+          }
+        );
+
+        console.log({ checkoutSessionCompleted, result });
 
         break;
 
-      case "invoice.payment_succeeded":
-        const invoicePaymentSucceeded = event.data.object;
+      // case "invoice.payment_succeeded":
+      //   const invoicePaymentSucceeded = event.data.object;
 
-        console.log({ invoicePaymentSucceeded });
+      //   console.log({ invoicePaymentSucceeded });
 
-        break;
+      //   break;
 
-      case "invoice.payment_failed":
-        const invoicePaymentFailed = event.data.object;
+      // case "invoice.payment_failed":
+      //   const invoicePaymentFailed = event.data.object;
 
-        console.log({ invoicePaymentFailed });
+      //   console.log({ invoicePaymentFailed });
 
-        break;
+      //   break;
 
-      case "customer.subscription.deleted":
-        const subscriptionDeleted = event.data.object;
-        console.log({ subscriptionDeleted });
+      // case "customer.subscription.deleted":
+      //   const subscriptionDeleted = event.data.object;
+      //   console.log({ subscriptionDeleted });
 
-      case "payment_intent.succeeded":
-        const paymentIntentSucceeded = event.data.object;
-        console.log({ paymentIntentSucceeded });
+      // case "payment_intent.succeeded":
+      //   const paymentIntentSucceeded = event.data.object;
+      //   console.log({ paymentIntentSucceeded });
 
-        break;
+      //   break;
 
       default:
         console.log(`Unhandled event type ${event.type}`);
@@ -116,6 +153,8 @@ app.post(
     response.send();
   }
 );
+
+app.use(express.json());
 
 app.post("/create-checkout-session", async (req, res) => {
   const { priceId, metadata } = req.body;
@@ -176,36 +215,9 @@ app.post("/create-checkout-session", async (req, res) => {
   }
 });
 
-const uri = process.env.MONGODB_URL;
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
-const client = new MongoClient(uri, {
-  serverApi: {
-    version: ServerApiVersion.v1,
-    strict: true,
-    deprecationErrors: true,
-  },
-});
-
 async function run() {
   try {
     // Connect the client to the server	(optional starting in v4.7)
-    client.connect();
-
-    const database = client.db("overtimeDB");
-    const users = database.collection("users");
-    const teams = database.collection("teams");
-    const events = database.collection("events");
-    const tasks = database.collection("tasks");
-    const notifications = database.collection("notifications");
-    const messages = database.collection("messages");
-    const plans = database.collection("plans");
-    const trips = database.collection("trips");
-    const customForms = database.collection("customForms");
-    const filledCustomForms = database.collection("filledCustomForms");
-    const medicalInformations = database.collection("medicalInformations");
-    const performances = database.collection("performances");
-    const formLibrary = database.collection("formLibrary");
-    const filledForms = database.collection("filledForms");
 
     const verifySuperAdmin = async (req, res, next) => {
       const email = req.decoded.email;
@@ -278,6 +290,15 @@ async function run() {
           .status(500)
           .json({ error: "An error occurred while fetching users." });
       }
+    });
+
+    app.post("/jwt", (req, res) => {
+      const user = req.body;
+      console.log("useruseruser", req.body);
+      const token = jwt.sign(user, process.env.JWT_SECRET_KEY, {
+        expiresIn: "10m",
+      });
+      res.send({ token });
     });
 
     // Get all users for super admin
@@ -537,17 +558,19 @@ async function run() {
     });
 
     app.get("/users/:userEmail", async (req, res) => {
-      console.log(req.params.userEmail);
+      console.log("userEmail", req.params.userEmail);
 
       const userEmail = req.params.userEmail;
+
       const result = await users.findOne({ email: userEmail });
-      console.log(result);
 
       res.send(result);
     });
 
     app.post("/user", async (req, res) => {
       const user = req.body;
+
+      console.log({ user });
 
       const existingUser = await users.findOne({ email: user.email });
       console.log({ existingUser });
