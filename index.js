@@ -89,7 +89,8 @@ app.post(
       event = stripe.webhooks.constructEvent(
         request.body,
         sig,
-        "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
+        // "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
+        "whsec_zOd7n9tv2VRMzfHMPAU06EH93xor1RUC"
       );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
@@ -194,8 +195,8 @@ app.post("/create-checkout-session", async (req, res) => {
       ],
       mode: "subscription",
       customer_email: metadata.email,
-      success_url: "http://localhost:3000/dashboard",
-      cancel_url: "http://localhost:3000",
+      success_url: "https://overtimeam.com/dashboard",
+      cancel_url: "https://overtimeam.com/payment",
       metadata: metadata || {},
     };
 
@@ -205,6 +206,13 @@ app.post("/create-checkout-session", async (req, res) => {
     ) {
       sessionConfig.discounts = [{ coupon: coupon.id }];
     }
+
+    if (metadata.customer_id) {
+      sessionConfig.customer = metadata.customer_id;
+
+      delete sessionConfig.customer_email;
+    }
+    sessionConfig.mode = "subscription";
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
 
