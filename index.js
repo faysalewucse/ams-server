@@ -6,6 +6,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const { Server } = require("socket.io");
 // const upload = require("./middleware/upload");
 const multer = require("multer");
+const sendMail = require("./sendMail");
 const cloudinary = require("cloudinary").v2;
 const storage = multer.diskStorage({});
 const stripe = require("stripe")(
@@ -77,6 +78,7 @@ const medicalInformations = database.collection("medicalInformations");
 const performances = database.collection("performances");
 const formLibrary = database.collection("formLibrary");
 const filledForms = database.collection("filledForms");
+const prices = database.collection("prices");
 
 app.post(
   "/webhooks",
@@ -89,8 +91,8 @@ app.post(
       event = stripe.webhooks.constructEvent(
         request.body,
         sig,
-        // "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
-        "whsec_zOd7n9tv2VRMzfHMPAU06EH93xor1RUC"
+        "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
+        // "whsec_zOd7n9tv2VRMzfHMPAU06EH93xor1RUC"
       );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
@@ -102,6 +104,12 @@ app.post(
     switch (event.type) {
       case "checkout.session.completed":
         const checkoutSessionCompleted = event.data.object;
+
+        const paymentIntent = await stripe.paymentIntents.retrieve(
+          checkoutSessionCompleted.payment_intent
+        );
+
+        console.log({ paymentIntent });
 
         const userEmaill = checkoutSessionCompleted.customer_email;
         const customer_id = checkoutSessionCompleted.customer;
@@ -277,6 +285,140 @@ async function run() {
       }
       next();
     };
+
+    // Create product in Stripe
+    const createStripeProduct = async (productName, price) => {
+      try {
+        const product = await stripe.products.create({
+          name: productName,
+          images: [
+            "https://cdn.pixabay.com/photo/2021/03/19/13/40/online-6107598_1280.png",
+          ],
+        });
+
+        console.log({ product });
+
+        const priceObject = await stripe.prices.create({
+          product: product.id,
+          unit_amount: price * 100, // Stripe expects the amount in cents
+          currency: "usd",
+        });
+        return priceObject;
+      } catch (error) {
+        console.error("Error creating product in Stripe:", error);
+        throw error;
+      }
+    };
+
+    // API endpoint to create a product
+    app.post("/api/prices", async (req, res) => {
+      try {
+        const { productName, price, addedBy } = req.body;
+
+        // Insert product into MongoDB
+        const product = {
+          productName,
+          price: parseFloat(price),
+          addedBy,
+        };
+
+        const stripeProduct = await createStripeProduct(productName, price);
+        product.priceId = stripeProduct.id;
+
+        const result = await prices.insertOne(product);
+
+        res.status(201).json(result);
+      } catch (error) {
+        console.error("Error creating product:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
+    app.post("/transfer", async (req, res) => {
+      try {
+        const fee = await stripe.applicationFees.create({
+          amount: Math.round(yourFee * 100), // Convert amount to cents
+          currency: "usd",
+          // charge: session.payment_intent,
+        });
+        res.json(fee);
+      } catch (error) {
+        console.error("Error fetching prices:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+    app.get("/api/prices", async (req, res) => {
+      try {
+        const pricesData = await prices.find().toArray();
+        res.json(pricesData);
+      } catch (error) {
+        console.error("Error fetching prices:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
+    app.post("/api/prices/assign", async (req, res) => {
+      try {
+        const { productName, teamId, priceId, price } = req.body;
+
+        console.log(productName, teamId, priceId, price);
+
+        const teamData = await teams.findOne({ _id: new ObjectId(teamId) });
+
+        const athletes = teamData?.athletes;
+
+        const athleteEmails = athletes.map((athlete) => athlete.athleteEmail);
+
+        console.log({ athleteEmails });
+
+        const session = await stripe.checkout.sessions.create({
+          payment_method_types: ["card"],
+
+          line_items: [
+            {
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          payment_intent_data: {
+            application_fee_amount: 123,
+          },
+          mode: "payment",
+          success_url: "https://overtimeam.com/dashboard",
+          cancel_url: "https://overtimeam.com",
+        });
+
+        const checkoutUrl = session.url;
+
+        const sendAthleteMail = await sendMail(athleteEmails, checkoutUrl);
+
+        // if (!sendAthleteMail) {
+        //   throw new Error("Something went wrong while assigning!");
+        // }
+
+        res.status(200).json({ message: "Price assigned successfully" });
+      } catch (error) {
+        console.error("Error fetching prices:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
+
+    app.post("/stripe/connect", async (req, res) => {
+      try {
+        const account = await stripe.accounts.create();
+
+        const accountLink = await stripe.accountLinks.create({
+          account: account.id,
+          refresh_url: "http://localhost:3000/dashboard/stripe",
+          return_url: "http://localhost:3000/dashboard/stripe",
+          type: "account_onboarding",
+        });
+        res.json(accountLink);
+      } catch (error) {
+        console.error("Error fetching prices:", error);
+        res.status(500).send("Internal Server Error");
+      }
+    });
 
     // all coaches including sub coaches
     app.get("/users/coaches/:adminEmail", verifyJWT, async (req, res) => {
