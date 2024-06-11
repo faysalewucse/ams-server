@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 // const upload = require("./middleware/upload");
 const multer = require("multer");
 const sendMail = require("./sendMail");
+const { oid } = require("mongo-oid");
 const cloudinary = require("cloudinary").v2;
 const storage = multer.diskStorage({});
 const stripe = require("stripe")(
@@ -20,6 +21,7 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 
+//TODO: Changed the server port to 5002 from 5000
 const port = process.env.PORT || 5000;
 
 const server = app.listen(port, () => {
@@ -79,6 +81,7 @@ const performances = database.collection("performances");
 const formLibrary = database.collection("formLibrary");
 const filledForms = database.collection("filledForms");
 const prices = database.collection("prices");
+const stripeAccount = database.collection("stripeAccount");
 
 app.post(
   "/webhooks",
@@ -323,6 +326,7 @@ async function run() {
         };
 
         const stripeProduct = await createStripeProduct(productName, price);
+        //FIXME: Property 'priceId' may not exist
         product.priceId = stripeProduct.id;
 
         const result = await prices.insertOne(product);
@@ -403,17 +407,51 @@ async function run() {
       }
     });
 
-    app.post("/stripe/connect", async (req, res) => {
+    //NOTE: Running Task abdurrahman
+    app.post("/stripe/connect/:adminId", async (req, res) => {
       try {
-        const account = await stripe.accounts.create();
+        const { adminId } = req.params;
+        // console.log("admin id", adminId);
+        let account;
+        let accountLink;
 
-        const accountLink = await stripe.accountLinks.create({
+        let a = false;
+
+        if (a) {
+          console.log("true");
+        } else {
+          account = await stripe.accounts.create({
+            type: "standard",
+          });
+        }
+
+        // console.log("account", account);
+
+        accountLink = await stripe.accountLinks.create({
           account: account.id,
           refresh_url: "http://localhost:3000/dashboard/stripe",
           return_url: "http://localhost:3000/dashboard/stripe",
           type: "account_onboarding",
         });
-        res.json(accountLink);
+
+        console.log("account link", accountLink.url);
+
+        await stripeAccount.updateOne(
+          { _id: new ObjectId(oid()) },
+          {
+            $set: {
+              accountId: account.id,
+              adminId: adminId,
+            },
+          },
+          {
+            upsert: true,
+          }
+        );
+
+    
+
+        res.json(accountLink.url);
       } catch (error) {
         console.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
@@ -1770,18 +1808,16 @@ async function run() {
           {
             $lookup: {
               from: "customForms",
-              let: { formId: { $toObjectId: "$formId" } },  // Convert formId to ObjectId
-              pipeline: [
-                { $match: { $expr: { $eq: ["$_id", "$$formId"] } } },
-              ],
-              as: "formInfo"
-            }
+              let: { formId: { $toObjectId: "$formId" } }, // Convert formId to ObjectId
+              pipeline: [{ $match: { $expr: { $eq: ["$_id", "$$formId"] } } }],
+              as: "formInfo",
+            },
           },
           {
             $set: {
-              formInfo: { $arrayElemAt: ["$formInfo", 0] }  // Extract the first element from formInfo array
-            }
-          }
+              formInfo: { $arrayElemAt: ["$formInfo", 0] }, // Extract the first element from formInfo array
+            },
+          },
         ];
 
         const cursor2 = filledCustomForms.aggregate(pipeline);
@@ -1793,7 +1829,6 @@ async function run() {
         res.status(500).json({ error: "Something went wrong" });
       }
     });
-
 
     app.post(
       "/upload-file",
