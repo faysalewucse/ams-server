@@ -1758,15 +1758,42 @@ async function run() {
           findBy = { adminEmail: userEmail };
         }
 
-        const cursor = filledForms.find(findBy);
+        console.log(findBy);
 
-        const result = await cursor.toArray();
-        res.send(result);
+        // Find filled forms
+        const cursor = filledForms.find(findBy);
+        const filled = await cursor.toArray();
+
+        // Aggregation pipeline for filledCustomForms
+        const pipeline = [
+          { $match: findBy },
+          {
+            $lookup: {
+              from: "customForms",
+              let: { formId: { $toObjectId: "$formId" } },  // Convert formId to ObjectId
+              pipeline: [
+                { $match: { $expr: { $eq: ["$_id", "$$formId"] } } },
+              ],
+              as: "formInfo"
+            }
+          },
+          {
+            $set: {
+              formInfo: { $arrayElemAt: ["$formInfo", 0] }  // Extract the first element from formInfo array
+            }
+          }
+        ];
+
+        const cursor2 = filledCustomForms.aggregate(pipeline);
+        const filledCustom = await cursor2.toArray();
+
+        res.send({ pdf: filled, custom: filledCustom });
       } catch (err) {
         console.error(err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
+
 
     app.post(
       "/upload-file",
