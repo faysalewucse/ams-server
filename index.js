@@ -411,50 +411,182 @@ async function run() {
     app.post("/stripe/connect/:adminId", async (req, res) => {
       try {
         const { adminId } = req.params;
-        // console.log("admin id", adminId);
+        console.log("admin id", adminId);
         let account;
         let accountLink;
 
         let a = false;
 
-        if (a) {
-          console.log("true");
+        const existingAccount = await stripeAccount.findOne({
+          adminId: adminId,
+        });
+
+        console.log(existingAccount);
+
+        console.log("req query", req.query);
+
+        if (
+          req.query.onBoarding === "true" &&
+          req.query.accountId !== undefined &&
+          existingAccount
+        ) {
+          console.log("req is in 1st condition: seller is in return url");
+          const accountId = req?.query?.accountId;
+          try {
+            console.log("I am on try block");
+            const accountDetails = await stripe.accounts.retrieve(
+              `${accountId}`
+            );
+
+            console.log("charges enabled", accountDetails.charges_enabled);
+
+            if (accountDetails.charges_enabled === true) {
+              console.log("charges enabled", accountDetails.charges_enabled);
+              await stripeAccount.updateOne(
+                { _id: existingAccount._id },
+                {
+                  $set: {
+                    connected: true,
+                  },
+                },
+                {
+                  upsert: true,
+                }
+              );
+
+              return res.json({
+                code: 200,
+                message: "stripe connected ",
+              });
+            } else {
+              console.log("again checking for charge enable ...........");
+              const accountDetails = await stripe.accounts.retrieve(
+                `${accountId}`
+              );
+
+              console.log("charges enabled", accountDetails.charges_enabled);
+
+              if (accountDetails.charges_enabled !== true) {
+                console.log("creating link again... no charge enables");
+
+                accountLink = await stripe.accountLinks.create({
+                  account: existingAccount.accountId,
+                  refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+                  return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+                  type: "account_onboarding",
+                });
+
+                return res.json({
+                  url: accountLink.url,
+                });
+              } else {
+                await stripeAccount.updateOne(
+                  { _id: existingAccount._id },
+                  {
+                    $set: {
+                      connected: true,
+                    },
+                  },
+                  {
+                    upsert: true,
+                  }
+                );
+
+                return res.json({
+                  code: 200,
+                  message: "stripe connected ",
+                });
+              }
+            }
+          } catch (err) {
+            console.log("err in first condition", err.message);
+          }
+        } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
+          console.log("req is in 2nd condition: seller is in refresh url");
+
+          try {
+            accountLink = await stripe.accountLinks.create({
+              account: existingAccount.accountId,
+              refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+              return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+              type: "account_onboarding",
+            });
+          } catch (err) {
+            console.log(err.message);
+          }
         } else {
+          console.log("account initiated: seller is in first stage");
+
+          // console.log(req)
+
           account = await stripe.accounts.create({
-            type: "standard",
+            type: "express",
           });
+
+          accountLink = await stripe.accountLinks.create({
+            account: account.id,
+            refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${account.id}`,
+            return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
+            type: "account_onboarding",
+          });
+
+          console.log("account link", accountLink.url);
+
+          await stripeAccount.updateOne(
+            { _id: new ObjectId(oid()) },
+            {
+              $set: {
+                accountId: account.id,
+                adminId: adminId,
+              },
+            },
+            {
+              upsert: true,
+            }
+          );
         }
 
         // console.log("account", account);
-
-        accountLink = await stripe.accountLinks.create({
-          account: account.id,
-          refresh_url: "http://localhost:3000/dashboard/stripe",
-          return_url: "http://localhost:3000/dashboard/stripe",
-          type: "account_onboarding",
-        });
-
-        console.log("account link", accountLink.url);
-
-        await stripeAccount.updateOne(
-          { _id: new ObjectId(oid()) },
-          {
-            $set: {
-              accountId: account.id,
-              adminId: adminId,
-            },
-          },
-          {
-            upsert: true,
-          }
-        );
-
-    
 
         res.json(accountLink.url);
       } catch (error) {
         console.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
+      }
+    });
+
+    app.get("/stripeConnect/:adminId", async (req, res) => {
+      try {
+        const adminId = req.params.adminId;
+
+        console.log("admin id 2ns", adminId);
+
+        const data = await stripeAccount.findOne({
+          adminId: adminId,
+        });
+
+        console.log("account", data);
+
+        res.json(data);
+      } catch (error) {
+        throw error;
+      }
+    });
+
+    app.get("/stripe/connect/login/:accountId", async (req, res) => {
+      try {
+        const accountId = req.params.accountId;
+
+        const account = await stripe.accounts.createLoginLink(`${accountId}`);
+
+        if (account.url)
+          return res.json({
+            url: account.url,
+          });
+
+        return res.json(account);
+      } catch (error) {
+        console.log(error);
       }
     });
 
