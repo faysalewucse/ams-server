@@ -119,6 +119,7 @@ app.post(
 
         const amount_total = checkoutSessionCompleted.amount_total / 100;
 
+        //FIXME:won't be fired if the user email is not in database
         const result = await users.updateOne(
           { email: userEmaill },
           {
@@ -361,9 +362,17 @@ async function run() {
       }
     });
 
+    const calcFee = (amount, fee) => {
+      const price = parseFloat(amount);
+      let feePercantage = fee / 100;
+      const feeInUsd = price * feePercantage + 0.19;
+      return feeInUsd * 100;
+    };
+
     app.post("/api/prices/assign", async (req, res) => {
       try {
-        const { productName, teamId, priceId, price } = req.body;
+        const { productName, teamId, priceId, price, stripeAccountId } =
+          req.body;
 
         console.log(productName, teamId, priceId, price);
 
@@ -375,9 +384,12 @@ async function run() {
 
         console.log({ athleteEmails });
 
+        let fee = calcFee(price, 0.6);
+
+        console.log(fee);
+
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
-
           line_items: [
             {
               price: priceId,
@@ -385,7 +397,10 @@ async function run() {
             },
           ],
           payment_intent_data: {
-            application_fee_amount: 123,
+            application_fee_amount: fee,
+            transfer_data: {
+              destination: `${stripeAccountId}`,
+            },
           },
           mode: "payment",
           success_url: "https://overtimeam.com/dashboard",
@@ -400,7 +415,9 @@ async function run() {
         //   throw new Error("Something went wrong while assigning!");
         // }
 
-        res.status(200).json({ message: "Price assigned successfully" });
+        res
+          .status(200)
+          .json({ message: "Price assigned successfully", url: checkoutUrl });
       } catch (error) {
         console.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
@@ -555,23 +572,24 @@ async function run() {
       }
     });
 
-    app.get("/stripeConnect/:adminId", async (req, res) => {
-      try {
-        const adminId = req.params.adminId;
+    app.get(
+      "/stripeConnect/:adminId",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const adminId = req.params.adminId;
 
-        console.log("admin id 2ns", adminId);
+          const data = await stripeAccount.findOne({
+            adminId: adminId,
+          });
 
-        const data = await stripeAccount.findOne({
-          adminId: adminId,
-        });
-
-        console.log("account", data);
-
-        res.json(data);
-      } catch (error) {
-        throw error;
+          res.json(data);
+        } catch (error) {
+          throw error;
+        }
       }
-    });
+    );
 
     app.get("/stripe/connect/login/:accountId", async (req, res) => {
       try {

@@ -5,13 +5,13 @@ module.exports = sendMail = async (to, text) => {
     service: "gmail",
     auth: {
       user: "Reachoutpro.ai@gmail.com",
-      pass: "nksguyptztdywcti",
+      pass: "fhtkcqbdluziedjm",
     },
   });
 
   const mailOptions = {
     from: "Reachoutpro.ai@gmail.com",
-    to: ["mohammadjahid0007@gmail.com"],
+    to: ["festivehaslett@heywhatsoup.com"],
     subject: "Payment request",
     text: text,
     // attachments: [fileData],
