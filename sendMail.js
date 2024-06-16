@@ -11,7 +11,7 @@ module.exports = sendMail = async (to, text) => {
 
   const mailOptions = {
     from: "Reachoutpro.ai@gmail.com",
-    to: ["festivehaslett@heywhatsoup.com"],
+    to: to,
     subject: "Payment request",
     text: text,
     // attachments: [fileData],

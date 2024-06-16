@@ -362,11 +362,21 @@ async function run() {
       }
     });
 
-    const calcFee = (amount, fee) => {
+    const calcFee = (amount, fee, fixedFee) => {
       const price = parseFloat(amount);
-      let feePercantage = fee / 100;
-      const feeInUsd = price * feePercantage + 0.19;
-      return feeInUsd * 100;
+
+      const stripeFeePercentage = 0.029;
+      const stripeFixedFee = 0.3;
+      const platformFeePercentage = fee / 100;
+      const platformFixedFee = fixedFee;
+
+      const stripeFee = price * stripeFeePercentage + stripeFixedFee;
+      const platformFee = price * platformFeePercentage + platformFixedFee;
+
+      return {
+        stripeFee,
+        platformFee,
+      };
     };
 
     app.post("/api/prices/assign", async (req, res) => {
@@ -376,44 +386,65 @@ async function run() {
 
         console.log(productName, teamId, priceId, price);
 
+        const baseAmountRaw = await stripe.prices.retrieve(priceId);
+
+        const baseAmount = baseAmountRaw.unit_amount / 100;
+
         const teamData = await teams.findOne({ _id: new ObjectId(teamId) });
 
         const athletes = teamData?.athletes;
 
         const athleteEmails = athletes.map((athlete) => athlete.athleteEmail);
 
-        console.log({ athleteEmails });
+        console.log(athleteEmails);
 
-        let fee = calcFee(price, 0.6);
+        let fee = calcFee(baseAmount, 0.6, 0.19);
+        const { stripeFee, platformFee } = fee;
 
-        console.log(fee);
+        const totalFee = stripeFee + platformFee;
 
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
           line_items: [
             {
-              price: priceId,
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: productName,
+                },
+                unit_amount: (baseAmount + totalFee) * 100,
+              },
               quantity: 1,
             },
           ],
           payment_intent_data: {
-            application_fee_amount: fee,
+            application_fee_amount: totalFee * 100,
             transfer_data: {
               destination: `${stripeAccountId}`,
             },
           },
           mode: "payment",
+          metadata: {
+            base_amount: baseAmount,
+            stripe_fee: stripeFee,
+            platform_fee: platformFee,
+          },
           success_url: "https://overtimeam.com/dashboard",
           cancel_url: "https://overtimeam.com",
         });
 
         const checkoutUrl = session.url;
 
-        const sendAthleteMail = await sendMail(athleteEmails, checkoutUrl);
+        const promises = athleteEmails.map(
+          async (athleteEmail) => await sendMail(athleteEmail, checkoutUrl)
+        );
 
-        // if (!sendAthleteMail) {
-        //   throw new Error("Something went wrong while assigning!");
-        // }
+        const sentMail = await Promise.all(promises);
+
+
+        if (!sentMail) {
+          throw new Error("Something went wrong while assigning!");
+        }
 
         res
           .status(200)
