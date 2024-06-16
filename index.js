@@ -7,6 +7,7 @@ const { Server } = require("socket.io");
 // const upload = require("./middleware/upload");
 const multer = require("multer");
 const sendMail = require("./sendMail");
+const { oid } = require("mongo-oid");
 const cloudinary = require("cloudinary").v2;
 const storage = multer.diskStorage({});
 const stripe = require("stripe")(
@@ -20,6 +21,7 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 
+//TODO: Changed the server port to 5002 from 5000
 const port = process.env.PORT || 5000;
 
 const server = app.listen(port, () => {
@@ -79,6 +81,7 @@ const performances = database.collection("performances");
 const formLibrary = database.collection("formLibrary");
 const filledForms = database.collection("filledForms");
 const prices = database.collection("prices");
+const stripeAccount = database.collection("stripeAccount");
 
 app.post(
   "/webhooks",
@@ -116,6 +119,7 @@ app.post(
 
         const amount_total = checkoutSessionCompleted.amount_total / 100;
 
+        //FIXME:won't be fired if the user email is not in database
         const result = await users.updateOne(
           { email: userEmaill },
           {
@@ -323,6 +327,7 @@ async function run() {
         };
 
         const stripeProduct = await createStripeProduct(productName, price);
+        //FIXME: Property 'priceId' may not exist
         product.priceId = stripeProduct.id;
 
         const result = await prices.insertOne(product);
@@ -357,11 +362,33 @@ async function run() {
       }
     });
 
+    const calcFee = (amount, fee, fixedFee) => {
+      const price = parseFloat(amount);
+
+      const stripeFeePercentage = 0.029;
+      const stripeFixedFee = 0.3;
+      const platformFeePercentage = fee / 100;
+      const platformFixedFee = fixedFee;
+
+      const stripeFee = price * stripeFeePercentage + stripeFixedFee;
+      const platformFee = price * platformFeePercentage + platformFixedFee;
+
+      return {
+        stripeFee,
+        platformFee,
+      };
+    };
+
     app.post("/api/prices/assign", async (req, res) => {
       try {
-        const { productName, teamId, priceId, price } = req.body;
+        const { productName, teamId, priceId, price, stripeAccountId } =
+          req.body;
 
         console.log(productName, teamId, priceId, price);
+
+        const baseAmountRaw = await stripe.prices.retrieve(priceId);
+
+        const baseAmount = baseAmountRaw.unit_amount / 100;
 
         const teamData = await teams.findOne({ _id: new ObjectId(teamId) });
 
@@ -369,54 +396,246 @@ async function run() {
 
         const athleteEmails = athletes.map((athlete) => athlete.athleteEmail);
 
-        console.log({ athleteEmails });
+        console.log(athleteEmails);
+
+        let fee = calcFee(baseAmount, 0.6, 0.19);
+        const { stripeFee, platformFee } = fee;
+
+        const totalFee = stripeFee + platformFee;
 
         const session = await stripe.checkout.sessions.create({
           payment_method_types: ["card"],
-
           line_items: [
             {
-              price: priceId,
+              price_data: {
+                currency: "usd",
+                product_data: {
+                  name: productName,
+                },
+                unit_amount: (baseAmount + totalFee) * 100,
+              },
               quantity: 1,
             },
           ],
           payment_intent_data: {
-            application_fee_amount: 123,
+            application_fee_amount: totalFee * 100,
+            transfer_data: {
+              destination: `${stripeAccountId}`,
+            },
           },
           mode: "payment",
+          metadata: {
+            base_amount: baseAmount,
+            stripe_fee: stripeFee,
+            platform_fee: platformFee,
+          },
           success_url: "https://overtimeam.com/dashboard",
           cancel_url: "https://overtimeam.com",
         });
 
         const checkoutUrl = session.url;
 
-        const sendAthleteMail = await sendMail(athleteEmails, checkoutUrl);
+        const promises = athleteEmails.map(
+          async (athleteEmail) => await sendMail(athleteEmail, checkoutUrl)
+        );
 
-        // if (!sendAthleteMail) {
-        //   throw new Error("Something went wrong while assigning!");
-        // }
+        const sentMail = await Promise.all(promises);
 
-        res.status(200).json({ message: "Price assigned successfully" });
+
+        if (!sentMail) {
+          throw new Error("Something went wrong while assigning!");
+        }
+
+        res
+          .status(200)
+          .json({ message: "Price assigned successfully", url: checkoutUrl });
       } catch (error) {
         console.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
       }
     });
 
-    app.post("/stripe/connect", async (req, res) => {
+    //NOTE: Running Task abdurrahman
+    app.post("/stripe/connect/:adminId", async (req, res) => {
       try {
-        const account = await stripe.accounts.create();
+        const { adminId } = req.params;
+        console.log("admin id", adminId);
+        let account;
+        let accountLink;
 
-        const accountLink = await stripe.accountLinks.create({
-          account: account.id,
-          refresh_url: "http://localhost:3000/dashboard/stripe",
-          return_url: "http://localhost:3000/dashboard/stripe",
-          type: "account_onboarding",
+        let a = false;
+
+        const existingAccount = await stripeAccount.findOne({
+          adminId: adminId,
         });
-        res.json(accountLink);
+
+        console.log(existingAccount);
+
+        console.log("req query", req.query);
+
+        if (
+          req.query.onBoarding === "true" &&
+          req.query.accountId !== undefined &&
+          existingAccount
+        ) {
+          console.log("req is in 1st condition: seller is in return url");
+          const accountId = req?.query?.accountId;
+          try {
+            console.log("I am on try block");
+            const accountDetails = await stripe.accounts.retrieve(
+              `${accountId}`
+            );
+
+            console.log("charges enabled", accountDetails.charges_enabled);
+
+            if (accountDetails.charges_enabled === true) {
+              console.log("charges enabled", accountDetails.charges_enabled);
+              await stripeAccount.updateOne(
+                { _id: existingAccount._id },
+                {
+                  $set: {
+                    connected: true,
+                  },
+                },
+                {
+                  upsert: true,
+                }
+              );
+
+              return res.json({
+                code: 200,
+                message: "stripe connected ",
+              });
+            } else {
+              console.log("again checking for charge enable ...........");
+              const accountDetails = await stripe.accounts.retrieve(
+                `${accountId}`
+              );
+
+              console.log("charges enabled", accountDetails.charges_enabled);
+
+              if (accountDetails.charges_enabled !== true) {
+                console.log("creating link again... no charge enables");
+
+                accountLink = await stripe.accountLinks.create({
+                  account: existingAccount.accountId,
+                  refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+                  return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+                  type: "account_onboarding",
+                });
+
+                return res.json({
+                  url: accountLink.url,
+                });
+              } else {
+                await stripeAccount.updateOne(
+                  { _id: existingAccount._id },
+                  {
+                    $set: {
+                      connected: true,
+                    },
+                  },
+                  {
+                    upsert: true,
+                  }
+                );
+
+                return res.json({
+                  code: 200,
+                  message: "stripe connected ",
+                });
+              }
+            }
+          } catch (err) {
+            console.log("err in first condition", err.message);
+          }
+        } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
+          console.log("req is in 2nd condition: seller is in refresh url");
+
+          try {
+            accountLink = await stripe.accountLinks.create({
+              account: existingAccount.accountId,
+              refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+              return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+              type: "account_onboarding",
+            });
+          } catch (err) {
+            console.log(err.message);
+          }
+        } else {
+          console.log("account initiated: seller is in first stage");
+
+          // console.log(req)
+
+          account = await stripe.accounts.create({
+            type: "express",
+          });
+
+          accountLink = await stripe.accountLinks.create({
+            account: account.id,
+            refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${account.id}`,
+            return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
+            type: "account_onboarding",
+          });
+
+          console.log("account link", accountLink.url);
+
+          await stripeAccount.updateOne(
+            { _id: new ObjectId(oid()) },
+            {
+              $set: {
+                accountId: account.id,
+                adminId: adminId,
+              },
+            },
+            {
+              upsert: true,
+            }
+          );
+        }
+
+        // console.log("account", account);
+
+        res.json(accountLink.url);
       } catch (error) {
         console.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
+      }
+    });
+
+    app.get(
+      "/stripeConnect/:adminId",
+      verifyJWT,
+      verifyAdmin,
+      async (req, res) => {
+        try {
+          const adminId = req.params.adminId;
+
+          const data = await stripeAccount.findOne({
+            adminId: adminId,
+          });
+
+          res.json(data);
+        } catch (error) {
+          throw error;
+        }
+      }
+    );
+
+    app.get("/stripe/connect/login/:accountId", async (req, res) => {
+      try {
+        const accountId = req.params.accountId;
+
+        const account = await stripe.accounts.createLoginLink(`${accountId}`);
+
+        if (account.url)
+          return res.json({
+            url: account.url,
+          });
+
+        return res.json(account);
+      } catch (error) {
+        console.log(error);
       }
     });
 
@@ -1770,18 +1989,16 @@ async function run() {
           {
             $lookup: {
               from: "customForms",
-              let: { formId: { $toObjectId: "$formId" } },  // Convert formId to ObjectId
-              pipeline: [
-                { $match: { $expr: { $eq: ["$_id", "$$formId"] } } },
-              ],
-              as: "formInfo"
-            }
+              let: { formId: { $toObjectId: "$formId" } }, // Convert formId to ObjectId
+              pipeline: [{ $match: { $expr: { $eq: ["$_id", "$$formId"] } } }],
+              as: "formInfo",
+            },
           },
           {
             $set: {
-              formInfo: { $arrayElemAt: ["$formInfo", 0] }  // Extract the first element from formInfo array
-            }
-          }
+              formInfo: { $arrayElemAt: ["$formInfo", 0] }, // Extract the first element from formInfo array
+            },
+          },
         ];
 
         const cursor2 = filledCustomForms.aggregate(pipeline);
@@ -1793,7 +2010,6 @@ async function run() {
         res.status(500).json({ error: "Something went wrong" });
       }
     });
-
 
     app.post(
       "/upload-file",
