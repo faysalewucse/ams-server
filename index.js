@@ -435,12 +435,44 @@ async function run() {
 
         const checkoutUrl = session.url;
 
+        const product = {
+          productName,
+          price: baseAmount + totalFee,
+          session_url: checkoutUrl,
+        };
+
+        //NOTE: tea,
+        const upsertTeam = await teams.updateOne(
+          { _id: new ObjectId(teamId) },
+          {
+            $set: {
+              product,
+            },
+          },
+          {
+            upsert: true,
+          }
+        );
+
+        const upsertPrice = await prices.updateOne(
+          { priceId: priceId },
+          {
+            $push: {
+              team: {
+                teamId: teamId,
+                teamName: teamData.teamName,
+              },
+            },
+          }
+        );
+
+        console.log(upsertPrice);
+
         const promises = athleteEmails.map(
           async (athleteEmail) => await sendMail(athleteEmail, checkoutUrl)
         );
 
         const sentMail = await Promise.all(promises);
-
 
         if (!sentMail) {
           throw new Error("Something went wrong while assigning!");
@@ -462,8 +494,6 @@ async function run() {
         console.log("admin id", adminId);
         let account;
         let accountLink;
-
-        let a = false;
 
         const existingAccount = await stripeAccount.findOne({
           adminId: adminId,
