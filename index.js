@@ -88,14 +88,16 @@ app.post(
   express.raw({ type: "application/json" }),
   async (request, response) => {
     const sig = request.headers["stripe-signature"];
+    console.log("sig", sig);
     let event;
 
+    //NOTE: Must change signature for production
     try {
       event = stripe.webhooks.constructEvent(
         request.body,
         sig,
-        "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
-        // "whsec_zOd7n9tv2VRMzfHMPAU06EH93xor1RUC"
+        // "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
+        "whsec_zOd7n9tv2VRMzfHMPAU06EH93xor1RUC"
       );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
@@ -108,11 +110,11 @@ app.post(
       case "checkout.session.completed":
         const checkoutSessionCompleted = event.data.object;
 
-        const paymentIntent = await stripe.paymentIntents.retrieve(
-          checkoutSessionCompleted.payment_intent
-        );
+        // const paymentIntent = await stripe.paymentIntents.retrieve(
+        //   checkoutSessionCompleted.payment_intent
+        // );
 
-        console.log({ paymentIntent });
+        // console.log({ paymentIntent });
 
         const userEmaill = checkoutSessionCompleted.customer_email;
         const customer_id = checkoutSessionCompleted.customer;
@@ -135,6 +137,38 @@ app.post(
 
         break;
 
+      // case "customer.subscription.created": {
+      //   console.log(event.type.data.object.status);
+      //   if (subscription.status === "active") {
+      //     const checkoutSessionCompleted = event.data.object;
+
+      //     const paymentIntent = await stripe.paymentIntents.retrieve(
+      //       checkoutSessionCompleted.payment_intent
+      //     );
+
+      //     console.log({ paymentIntent });
+
+      //     const userEmaill = checkoutSessionCompleted.customer_email;
+      //     const customer_id = checkoutSessionCompleted.customer;
+
+      //     const amount_total = checkoutSessionCompleted.amount_total / 100;
+
+      //     //FIXME:won't be fired if the user email is not in database
+      //     const result = await users.updateOne(
+      //       { email: userEmaill },
+      //       {
+      //         $set: {
+      //           amount_paid: amount_total,
+      //           customer_id: customer_id || "",
+      //           isSubscribed: true,
+      //         },
+      //       }
+      //     );
+
+      //     console.log({ checkoutSessionCompleted, result });
+      //   }
+      //   break;
+      // }
       // case "invoice.payment_succeeded":
       //   const invoicePaymentSucceeded = event.data.object;
 
