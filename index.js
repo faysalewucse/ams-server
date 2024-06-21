@@ -386,9 +386,13 @@ async function run() {
         res.status(500).send("Internal Server Error");
       }
     });
-    app.get("/api/prices", async (req, res) => {
+    app.get("/api/prices/:adminEmail", async (req, res) => {
       try {
-        const pricesData = await prices.find().toArray();
+        const adminEmail = req.params.adminEmail
+
+        console.log(adminEmail);
+        const pricesData = await prices.find({ addedBy: adminEmail }).toArray();
+        console.log(pricesData);
         res.json(pricesData);
       } catch (error) {
         console.error("Error fetching prices:", error);
@@ -418,7 +422,6 @@ async function run() {
         const { productName, teamId, priceId, price, stripeAccountId } =
           req.body;
 
-        console.log(productName, teamId, priceId, price);
 
         const baseAmountRaw = await stripe.prices.retrieve(priceId);
 
