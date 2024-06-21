@@ -583,8 +583,11 @@ async function run() {
 
                 accountLink = await stripe.accountLinks.create({
                   account: existingAccount.accountId,
-                  refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
-                  return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+                  // refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+                  // return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+
+                  refresh_url: `https://overtimeam.com/dashboard/stripe?accountId=${existingAccount.accountId}`,
+                  return_url: `https://overtimeam.com/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
                   type: "account_onboarding",
                 });
 
@@ -619,8 +622,11 @@ async function run() {
           try {
             accountLink = await stripe.accountLinks.create({
               account: existingAccount.accountId,
-              refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
-              return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+              // refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+              // return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+
+              refresh_url: `https://overtimeam.com/dashboard/stripe?accountId=${existingAccount.accountId}`,
+              return_url: `https://overtimeam.com/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
               type: "account_onboarding",
             });
           } catch (err) {
@@ -637,8 +643,11 @@ async function run() {
 
           accountLink = await stripe.accountLinks.create({
             account: account.id,
-            refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${account.id}`,
-            return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
+            refresh_url: `https://overtimeam.com/dashboard/stripe?accountId=${account.id}`,
+            return_url: `https://overtimeam.com/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
+
+            // refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${account.id}`,
+            // return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
             type: "account_onboarding",
           });
 
