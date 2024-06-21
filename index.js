@@ -646,8 +646,8 @@ async function run() {
             refresh_url: `https://overtimeam.com/dashboard/stripe?accountId=${account.id}`,
             return_url: `https://overtimeam.com/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
 
-            refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${account.id}`,
-            return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
+            // refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${account.id}`,
+            // return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${account.id}`,
             type: "account_onboarding",
           });
 
