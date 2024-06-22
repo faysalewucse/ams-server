@@ -388,7 +388,7 @@ async function run() {
     });
     app.get("/api/prices/:adminEmail", async (req, res) => {
       try {
-        const adminEmail = req.params.adminEmail
+        const adminEmail = req.params.adminEmail;
 
         console.log(adminEmail);
         const pricesData = await prices.find({ addedBy: adminEmail }).toArray();
@@ -421,7 +421,6 @@ async function run() {
       try {
         const { productName, teamId, priceId, price, stripeAccountId } =
           req.body;
-
 
         const baseAmountRaw = await stripe.prices.retrieve(priceId);
 
@@ -478,7 +477,7 @@ async function run() {
           session_url: checkoutUrl,
         };
 
-        //NOTE: tea,
+        //NOTE: team,
         const upsertTeam = await teams.updateOne(
           { _id: new ObjectId(teamId) },
           {
@@ -546,7 +545,8 @@ async function run() {
           existingAccount
         ) {
           console.log("req is in 1st condition: seller is in return url");
-          const accountId = req?.query?.accountId;
+          // const accountId = req?.query?.accountId;
+          const accountId = existingAccount.accountId;
           try {
             console.log("I am on try block");
             const accountDetails = await stripe.accounts.retrieve(
@@ -619,6 +619,74 @@ async function run() {
           } catch (err) {
             console.log("err in first condition", err.message);
           }
+        } else if (existingAccount) {
+          console.log("Existing account section");
+          const accountId = existingAccount.accountId;
+
+          try {
+            const accountDetails = await stripe.accounts.retrieve(
+              `${accountId}`
+            );
+            if (accountDetails.charges_enabled === true) {
+              console.log("charges enabled", accountDetails.charges_enabled);
+              await stripeAccount.updateOne(
+                { _id: existingAccount._id },
+                {
+                  $set: {
+                    connected: true,
+                  },
+                },
+                {
+                  upsert: true,
+                }
+              );
+
+              return res.json({
+                code: 200,
+                message: "stripe connected ",
+              });
+            } else {
+              console.log("again checking for charge enable ...........");
+              const accountDetails = await stripe.accounts.retrieve(
+                `${accountId}`
+              );
+
+              console.log("charges enabled", accountDetails.charges_enabled);
+
+              if (accountDetails.charges_enabled !== true) {
+                console.log("creating link again... no charge enables");
+
+                accountLink = await stripe.accountLinks.create({
+                  account: existingAccount.accountId,
+                  // refresh_url: `http://localhost:3000/dashboard/stripe?accountId=${existingAccount.accountId}`,
+                  // return_url: `http://localhost:3000/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+
+                  refresh_url: `https://overtimeam.com/dashboard/stripe?accountId=${existingAccount.accountId}`,
+                  return_url: `https://overtimeam.com/dashboard/stripe?onBoarding=true&accountId=${existingAccount.accountId}`,
+                  type: "account_onboarding",
+                });
+
+                return res.json(accountLink.url);
+              } else {
+                await stripeAccount.updateOne(
+                  { _id: existingAccount._id },
+                  {
+                    $set: {
+                      connected: true,
+                    },
+                  },
+                  {
+                    upsert: true,
+                  }
+                );
+
+                return res.json({
+                  code: 200,
+                  message: "stripe connected ",
+                });
+              }
+            }
+          } catch (error) {}
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
