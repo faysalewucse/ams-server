@@ -13,7 +13,7 @@ module.exports = sendMail = async (to, text) => {
     from: "Reachoutpro.ai@gmail.com",
     to: to,
     subject: "Payment request",
-    text: text,
+    html: text,
     // attachments: [fileData],
   };
 

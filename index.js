@@ -110,30 +110,69 @@ app.post(
       case "checkout.session.completed":
         const checkoutSessionCompleted = event.data.object;
 
+        console.log(checkoutSessionCompleted);
+
         // const paymentIntent = await stripe.paymentIntents.retrieve(
         //   checkoutSessionCompleted.payment_intent
         // );
 
         // console.log({ paymentIntent });
 
-        const userEmaill = checkoutSessionCompleted.customer_email;
+        // const metadata = JSON.parse(checkoutSessionCompleted.metadata);
+
+        console.log("metadata: ", checkoutSessionCompleted.metadata);
+
+        const metadata = checkoutSessionCompleted.metadata;
+
+        const userEmail = checkoutSessionCompleted.customer_email;
         const customer_id = checkoutSessionCompleted.customer;
+
+        console.log("User email", userEmail);
+        //FIXME
+        if (checkoutSessionCompleted.metadata.productType === "prices") {
+          try {
+            const res = await teams.updateOne(
+              {
+                _id: new ObjectId(metadata.teamId),
+                "products.productId": metadata.productId,
+                "products.sessions.athleteEmail": userEmail,
+              },
+              {
+                $set: {
+                  "products.$[productElem].sessions.$[sessionElem].paid": true,
+                },
+              },
+              {
+                arrayFilters: [
+                  { "productElem.productId": metadata.productId },
+                  { "sessionElem.athleteEmail": userEmail },
+                ],
+              }
+            );
+            console.log(res);
+          } catch (error) {
+            console.log(error);
+          }
+        }
 
         const amount_total = checkoutSessionCompleted.amount_total / 100;
 
         //FIXME:won't be fired if the user email is not in database
-        const result = await users.updateOne(
-          { email: userEmaill },
-          {
-            $set: {
-              amount_paid: amount_total,
-              customer_id: customer_id || "",
-              isSubscribed: true,
-            },
-          }
-        );
 
-        console.log({ checkoutSessionCompleted, result });
+        if (checkoutSessionCompleted.mode === "subscription") {
+          const result = await users.updateOne(
+            { email: userEmail },
+            {
+              $set: {
+                amount_paid: amount_total,
+                customer_id: customer_id || "",
+                isSubscribed: true,
+              },
+            }
+          );
+
+          console.log({ checkoutSessionCompleted, result });
+        }
 
         break;
 
@@ -417,113 +456,139 @@ async function run() {
       };
     };
 
+    //NOTE: Running Task abdurrahman
+
     app.post("/api/prices/assign", async (req, res) => {
       try {
-        const { productName, teamId, priceId, price, stripeAccountId } =
-          req.body;
+        const { productName, teamId, priceId, stripeAccountId } = req.body;
+
+        console.log("body", req.body);
 
         const baseAmountRaw = await stripe.prices.retrieve(priceId);
-
-        const baseAmount = baseAmountRaw.unit_amount / 100;
+        const baseAmount = parseFloat(baseAmountRaw.unit_amount / 100);
 
         const teamData = await teams.findOne({ _id: new ObjectId(teamId) });
-
-        const athletes = teamData?.athletes;
-
+        const athletes = teamData?.athletes || [];
         const athleteEmails = athletes.map((athlete) => athlete.athleteEmail);
-
-        console.log(athleteEmails);
 
         let fee = calcFee(baseAmount, 0.6, 0.19);
         const { stripeFee, platformFee } = fee;
+        const totalFee = parseFloat((stripeFee + platformFee).toFixed(2));
 
-        const totalFee = stripeFee + platformFee;
+        console.log("totalFee before", totalFee);
 
-        const session = await stripe.checkout.sessions.create({
-          payment_method_types: ["card"],
-          line_items: [
-            {
-              price_data: {
-                currency: "usd",
-                product_data: {
-                  name: productName,
-                },
-                unit_amount: (baseAmount + totalFee) * 100,
-              },
-              quantity: 1,
-            },
-          ],
-          payment_intent_data: {
-            application_fee_amount: totalFee * 100,
-            transfer_data: {
-              destination: `${stripeAccountId}`,
-            },
-          },
-          mode: "payment",
-          metadata: {
-            base_amount: baseAmount,
-            stripe_fee: stripeFee,
-            platform_fee: platformFee,
-          },
-          success_url: "https://overtimeam.com/dashboard",
-          cancel_url: "https://overtimeam.com",
-        });
-
-        const checkoutUrl = session.url;
-
-        const product = {
-          productName,
-          price: baseAmount + totalFee,
-          session_url: checkoutUrl,
-        };
+        console.log("base fee before", baseAmount);
 
         //NOTE: team,
-        const upsertTeam = await teams.updateOne(
-          { _id: new ObjectId(teamId) },
-          {
-            $set: {
-              product,
-            },
-          },
-          {
-            upsert: true,
-          }
-        );
+        const sessionPromises = athleteEmails.map(async (athleteEmail) => {
+          try {
+            const roundedFee = parseInt((totalFee * 100).toFixed(2));
 
-        const upsertPrice = await prices.updateOne(
-          { priceId: priceId },
-          {
-            $push: {
-              team: {
-                teamId: teamId,
-                teamName: teamData.teamName,
+            console.log("roundedFee", roundedFee);
+
+            const total = parseInt(((baseAmount + totalFee) * 100).toFixed(2));
+
+            console.log("total", total);
+
+            const session = await stripe.checkout.sessions.create({
+              payment_method_types: ["card"],
+              line_items: [
+                {
+                  price_data: {
+                    currency: "usd",
+                    product_data: { name: productName },
+                    unit_amount: total,
+                  },
+                  quantity: 1,
+                },
+              ],
+              payment_intent_data: {
+                application_fee_amount: roundedFee,
+                transfer_data: { destination: stripeAccountId },
               },
-            },
+              mode: "payment",
+              customer_email: athleteEmail,
+              metadata: {
+                productType: "prices",
+                teamId: teamId,
+                productId: priceId,
+                base_amount: baseAmount,
+                stripe_fee: stripeFee,
+                platform_fee: platformFee,
+              },
+              // success_url: "http://localhost:3000/dashboard",
+              // cancel_url: "http://localhost:3000",
+
+              success_url: "https://overtimeam.com/dashboard",
+              cancel_url: "https://overtimeam.com",
+            });
+
+            const checkoutUrl = session.url;
+            return { checkoutUrl, athleteEmail, paid: false };
+          } catch (error) {
+            console.log(error);
+            return null;
           }
-        );
+        });
 
-        console.log(upsertPrice);
+        const sessions = (await Promise.all(sessionPromises)).filter(Boolean);
+        console.log("sessions", sessions);
 
-        const promises = athleteEmails.map(
-          async (athleteEmail) => await sendMail(athleteEmail, checkoutUrl)
-        );
+        const products = {
+          productId: priceId,
+          productName,
+          price: baseAmount + totalFee,
+          sessions: sessions,
+        };
 
-        const sentMail = await Promise.all(promises);
+        console.log("products : ", products);
 
-        if (!sentMail) {
-          throw new Error("Something went wrong while assigning!");
-        }
+        // Batch database operations
+        await Promise.all([
+          teams.updateOne(
+            { _id: new ObjectId(teamId) },
+            { $push: { products } },
+            { upsert: true }
+          ),
+          prices.updateOne(
+            { priceId },
+            {
+              $push: {
+                team: {
+                  teamId,
+                  teamName: teamData.teamName,
+                },
+              },
+            }
+          ),
+        ]);
 
-        res
-          .status(200)
-          .json({ message: "Price assigned successfully", url: checkoutUrl });
+        // Send emails asynchronously
+        sessions.forEach(({ athleteEmail, checkoutUrl }) => {
+          const mailText = `<p>
+  Hi there,<br><br>
+
+  You are required to pay for <strong>${productName}</strong> ($${products.price}) by team <strong>${teamData.teamName}</strong>.<br><br>
+
+  Please make your payment using this secure link:<br>
+  <a href="${checkoutUrl}" target="_blank">${checkoutUrl}</a><br><br>
+
+  You can also make this payment from your dashboard.<br><br>
+  
+  Thank you!<br>
+  OverTime Athletic Management
+</p> `;
+
+          sendMail(athleteEmail, mailText).catch(console.error);
+        });
+
+        res.status(200).json({ message: "Price assigned successfully" });
       } catch (error) {
         console.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
       }
     });
 
-    //NOTE: Running Task abdurrahman
     app.post("/stripe/connect/:adminId", async (req, res) => {
       try {
         const { adminId } = req.params;
