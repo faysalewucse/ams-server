@@ -21,7 +21,6 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 
-//TODO: Changed the server port to 5002 from 5000
 const port = process.env.PORT || 5000;
 
 const server = app.listen(port, () => {
@@ -127,8 +126,6 @@ app.post(
         const userEmail = checkoutSessionCompleted.customer_email;
         const customer_id = checkoutSessionCompleted.customer;
 
-        console.log("User email", userEmail);
-        //FIXME
         if (checkoutSessionCompleted.metadata.productType === "prices") {
           try {
             const res = await teams.updateOne(
@@ -140,6 +137,8 @@ app.post(
               {
                 $set: {
                   "products.$[productElem].sessions.$[sessionElem].paid": true,
+                  "products.$[productElem].sessions.$[sessionElem].paidDate":
+                    new Date(),
                 },
               },
               {
@@ -156,8 +155,6 @@ app.post(
         }
 
         const amount_total = checkoutSessionCompleted.amount_total / 100;
-
-        //FIXME:won't be fired if the user email is not in database
 
         if (checkoutSessionCompleted.mode === "subscription") {
           const result = await users.updateOne(
