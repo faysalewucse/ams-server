@@ -1,6 +1,6 @@
 const nodemailer = require("nodemailer");
 
-module.exports = sendMail = async (to, text) => {
+module.exports = sendMail = async (to, subject,text) => {
   const transporter = nodemailer.createTransport({
     service: "gmail",
     auth: {
@@ -12,7 +12,7 @@ module.exports = sendMail = async (to, text) => {
   const mailOptions = {
     from: "Reachoutpro.ai@gmail.com",
     to: to,
-    subject: "Payment request",
+    subject: subject,
     html: text,
     // attachments: [fileData],
   };

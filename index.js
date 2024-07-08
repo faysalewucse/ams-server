@@ -14,6 +14,8 @@ const stripe = require("stripe")(
   "sk_test_51OQ16rFd3jBtA0ChSF8R9j0LkJIGspNDvSlPFQlW6PvANqX08W6RuEsZ9NDq802aw2QIUsHnW0ZbVvMENdAD54CN00zbqNErkK"
 );
 
+const crypto = require("crypto");
+
 const upload = multer({ storage });
 
 require("dotenv").config();
@@ -81,6 +83,7 @@ const formLibrary = database.collection("formLibrary");
 const filledForms = database.collection("filledForms");
 const prices = database.collection("prices");
 const stripeAccount = database.collection("stripeAccount");
+const invitedUsers = database.collection("invitedUsers");
 
 app.post(
   "/webhooks",
@@ -562,6 +565,7 @@ async function run() {
 
         // Send emails asynchronously
         sessions.forEach(({ athleteEmail, checkoutUrl }) => {
+          const subject = "Payment Request";
           const mailText = `<p>
   Hi there,<br><br>
 
@@ -576,7 +580,7 @@ async function run() {
   OverTime Athletic Management
 </p> `;
 
-          sendMail(athleteEmail, mailText).catch(console.error);
+          sendMail(athleteEmail, subject, mailText).catch(console.error);
         });
 
         res.status(200).json({ message: "Price assigned successfully" });
@@ -864,6 +868,86 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while fetching users." });
+      }
+    });
+
+    //NOTE:Athlete invite
+    app.post(
+      "/inviteatheletes",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        try {
+          const data = req.body;
+
+          const body = req.body;
+
+          const bodyData = { ...body };
+
+          console.log(bodyData);
+
+          const invited = await invitedUsers.insertOne(bodyData);
+
+          console.log(invited.insertedId);
+
+          const token = invited.insertedId;
+
+          // const link = `http://localhost:3000/register?token=${invited.insertedId}`;
+          const link = `https://overtimeam.com/register?token=${invited.insertedId}`;
+
+          const subject = "Invitation";
+
+          if (body.lessThan18) {
+            const mailText = `<p>
+  Dear <strong>${bodyData.parentFirstName}</strong> ,<br><br>
+
+ You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
+
+  Please use this registration link to sign up :<br>
+  <a href="${link}" target="_blank">${link}</a><br><br>
+
+  
+  Thank you!<br>
+  OverTime Athletic Management
+</p> `;
+
+            sendMail(body.parentEmail, subject, mailText);
+          } else {
+            const mailText = `<p>
+  Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
+
+ You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
+  Please use this registration link to sign up :<br>
+  <a href="${link}" target="_blank">${link}</a><br><br>
+
+  
+  Thank you!<br>
+  OverTime Athletic Management
+</p> `;
+
+            sendMail(body.athleteEmail, subject, mailText);
+          }
+          res.status(200).send(token);
+        } catch (error) {
+          console.log(error);
+          res
+            .status(500)
+            .send({ error: "An error occurred while creating invitations." });
+        }
+      }
+    );
+
+    app.get("/invitedUsers/:token", async (req, res) => {
+      try {
+        const id = req.params.token;
+        console.log({ id });
+        const result = await invitedUsers.findOne({ _id: new ObjectId(id) });
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error fetching invited users:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching invited users." });
       }
     });
 
