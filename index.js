@@ -878,8 +878,6 @@ async function run() {
       verifyAdminOrCoach,
       async (req, res) => {
         try {
-          const data = req.body;
-
           const body = req.body;
 
           const bodyData = { ...body };
@@ -901,7 +899,7 @@ async function run() {
             const mailText = `<p>
   Dear <strong>${bodyData.parentFirstName}</strong> ,<br><br>
 
- You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
+ You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong> for the following athlete : <strong>${bodyData.athleteFirstName} ${bodyData.athleteLastName}</strong>(${body.athleteEmail}) <br>
 
   Please use this registration link to sign up :<br>
   <a href="${link}" target="_blank">${link}</a><br><br>
@@ -910,13 +908,15 @@ async function run() {
   Thank you!<br>
   OverTime Athletic Management
 </p> `;
-
-            sendMail(body.parentEmail, subject, mailText);
+            sendMail(body.parentEmail, subject, mailText)
+              .then((resMail) => ({}))
+              .catch((err) => console.log({ err }));
           } else {
             const mailText = `<p>
   Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
 
  You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
+
   Please use this registration link to sign up :<br>
   <a href="${link}" target="_blank">${link}</a><br><br>
 
@@ -925,7 +925,9 @@ async function run() {
   OverTime Athletic Management
 </p> `;
 
-            sendMail(body.athleteEmail, subject, mailText);
+            sendMail(body.athleteEmail, subject, mailText)
+              .then((resMail) => ({}))
+              .catch((err) => console.log({ err }));
           }
           res.status(200).send(token);
         } catch (error) {
