@@ -895,40 +895,73 @@ async function run() {
 
           const subject = "Invitation";
 
-          if (body.lessThan18) {
-            const mailText = `<p>
-  Dear <strong>${bodyData.parentFirstName}</strong> ,<br><br>
+          //           if (body.lessThan18) {
+          //             const mailText = `<p>
+          //   Dear <strong>${bodyData.parentFirstName}</strong> ,<br><br>
 
- You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong> for the following athlete : <strong>${bodyData.athleteFirstName} ${bodyData.athleteLastName}</strong>(${body.athleteEmail}) <br>
+          //  You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong> for the following athlete : <strong>${bodyData.athleteFirstName} ${bodyData.athleteLastName}</strong>(${body.athleteEmail}) <br>
 
-  Please use this registration link to sign up :<br>
-  <a href="${link}" target="_blank">${link}</a><br><br>
+          //   Please use this registration link to sign up :<br>
+          //   <a href="${link}" target="_blank">${link}</a><br><br>
 
-  
-  Thank you!<br>
-  OverTime Athletic Management
-</p> `;
-            sendMail(body.parentEmail, subject, mailText)
-              .then((resMail) => ({}))
-              .catch((err) => console.log({ err }));
-          } else {
-            const mailText = `<p>
-  Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
+          //   Thank you!<br>
+          //   OverTime Athletic Management
+          // </p> `;
+          //             sendMail(body.parentEmail, subject, mailText)
+          //               .then((resMail) => console.log({resMail}))
+          //               .catch((err) => console.log({ err }));
+          //           } else {
+          //             const mailText = `<p>
+          //   Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
 
- You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
+          //  You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
 
-  Please use this registration link to sign up :<br>
-  <a href="${link}" target="_blank">${link}</a><br><br>
+          //   Please use this registration link to sign up :<br>
+          //   <a href="${link}" target="_blank">${link}</a><br><br>
 
-  
-  Thank you!<br>
-  OverTime Athletic Management
-</p> `;
+          //   Thank you!<br>
+          //   OverTime Athletic Management
+          // </p> `;
 
-            sendMail(body.athleteEmail, subject, mailText)
-              .then((resMail) => ({}))
-              .catch((err) => console.log({ err }));
+          //             sendMail(body.athleteEmail, subject, mailText)
+          //               .then((resMail) => console.log({ resMail }))
+          //               .catch((err) => console.log({ err }));
+          //           }
+
+          const mailText = bodyData.lessThan18
+            ? `<p>
+      Dear <strong>${bodyData.parentFirstName}</strong> ,<br><br>
+      You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong> for the following athlete : <strong>${bodyData.athleteFirstName} ${bodyData.athleteLastName}</strong>(${bodyData.athleteEmail}) <br>
+      Please use this registration link to sign up :<br>
+      <a href="${link}" target="_blank">${link}</a><br><br>
+      Thank you!<br>
+      OverTime Athletic Management
+    </p>`
+            : `<p>
+      Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
+      You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
+      Please use this registration link to sign up :<br>
+      <a href="${link}" target="_blank">${link}</a><br><br>
+      Thank you!<br>
+      OverTime Athletic Management
+    </p>`;
+
+          const recipientEmail = bodyData.lessThan18
+            ? bodyData.parentEmail
+            : bodyData.athleteEmail;
+
+          try {
+            const resMail = await sendMail(recipientEmail, subject, mailText);
+            console.log("Mail sent successfully", resMail);
+          } catch (mailError) {
+            console.error("Error sending mail", mailError);
+            return res
+              .status(500)
+              .send({
+                error: "An error occurred while sending the invitation email.",
+              });
           }
+
           res.status(200).send(token);
         } catch (error) {
           console.log(error);
