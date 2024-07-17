@@ -1549,6 +1549,7 @@ async function run() {
     // add teams to db
     app.post("/teams", verifyJWT, verifyAdminOrCoach, async (req, res) => {
       const data = req.body;
+      console.log({ data });
       const result = await teams.insertOne(data);
       res.send(result);
     });
