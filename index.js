@@ -84,6 +84,7 @@ const filledForms = database.collection("filledForms");
 const prices = database.collection("prices");
 const stripeAccount = database.collection("stripeAccount");
 const invitedUsers = database.collection("invitedUsers");
+const teamRoster = database.collection("teamRoster");
 
 app.post(
   "/webhooks",
@@ -479,7 +480,6 @@ async function run() {
 
         console.log("base fee before", baseAmount);
 
-        //NOTE: team,
         const sessionPromises = athleteEmails.map(async (athleteEmail) => {
           try {
             const roundedFee = parseInt((totalFee * 100).toFixed(2));
@@ -882,51 +882,16 @@ async function run() {
 
           const bodyData = { ...body };
 
-          console.log(bodyData);
+          console.log({ bodyData });
 
           const invited = await invitedUsers.insertOne(bodyData);
 
-          console.log(invited.insertedId);
-
           const token = invited.insertedId;
 
-          // const link = `http://localhost:3000/register?token=${invited.insertedId}`;
-          const link = `https://overtimeam.com/register?token=${invited.insertedId}`;
+          const link = `http://localhost:3000/register?token=${invited.insertedId}`;
+          // const link = `https://overtimeam.com/register?token=${invited.insertedId}`;
 
           const subject = "Invitation";
-
-          //           if (body.lessThan18) {
-          //             const mailText = `<p>
-          //   Dear <strong>${bodyData.parentFirstName}</strong> ,<br><br>
-
-          //  You have been invited to join overtimeam as Parent by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong> for the following athlete : <strong>${bodyData.athleteFirstName} ${bodyData.athleteLastName}</strong>(${body.athleteEmail}) <br>
-
-          //   Please use this registration link to sign up :<br>
-          //   <a href="${link}" target="_blank">${link}</a><br><br>
-
-          //   Thank you!<br>
-          //   OverTime Athletic Management
-          // </p> `;
-          //             sendMail(body.parentEmail, subject, mailText)
-          //               .then((resMail) => console.log({resMail}))
-          //               .catch((err) => console.log({ err }));
-          //           } else {
-          //             const mailText = `<p>
-          //   Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
-
-          //  You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
-
-          //   Please use this registration link to sign up :<br>
-          //   <a href="${link}" target="_blank">${link}</a><br><br>
-
-          //   Thank you!<br>
-          //   OverTime Athletic Management
-          // </p> `;
-
-          //             sendMail(body.athleteEmail, subject, mailText)
-          //               .then((resMail) => console.log({ resMail }))
-          //               .catch((err) => console.log({ err }));
-          //           }
 
           const mailText = bodyData.lessThan18
             ? `<p>
@@ -938,14 +903,21 @@ async function run() {
       OverTime Athletic Management
     </p>`
             : `<p>
-      Dear <strong>${bodyData.athleteFirstName}</strong> ,<br><br>
-      You have been invited to join overtimeam as athelete by ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name} </strong>
-      Please use this registration link to sign up :<br>
-      <a href="${link}" target="_blank">${link}</a><br><br>
-      Thank you!<br>
-      OverTime Athletic Management
-    </p>`;
+  Dear <strong>${bodyData.athleteFirstName} ${bodyData.athleteLastName}</strong>,<br><br>
 
+  Congratulations, you've been invited by the ${bodyData.invitedBy.role} <strong>${bodyData.invitedBy.name}</strong> to tryout for <strong>${bodyData.teamName}</strong>. The tryout will be held on <strong>${bodyData.tryOutStartDate}</strong>.  
+
+  Please use this registration link to sign up:<br>
+  <a href="${link}" target="_blank">${link}</a><br><br>
+
+  For any additional info, please reach out to the Team Coach at <a href="mailto:${bodyData.coach}" target="_blank">${bodyData.coach}</a><br><br>
+
+  Thank you!<br>
+
+  ${bodyData.organization} <br><br>
+
+  Powered by Overtime Athletic Management
+</p>`;
           const recipientEmail = bodyData.lessThan18
             ? bodyData.parentEmail
             : bodyData.athleteEmail;
@@ -955,11 +927,9 @@ async function run() {
             console.log("Mail sent successfully", resMail);
           } catch (mailError) {
             console.error("Error sending mail", mailError);
-            return res
-              .status(500)
-              .send({
-                error: "An error occurred while sending the invitation email.",
-              });
+            return res.status(500).send({
+              error: "An error occurred while sending the invitation email.",
+            });
           }
 
           res.status(200).send(token);
@@ -1261,6 +1231,7 @@ async function run() {
       res.send(result);
     });
 
+    //NOTE: reg user
     app.post("/user", async (req, res) => {
       const user = req.body;
 
@@ -1275,6 +1246,40 @@ async function run() {
       }
 
       const result = await users.insertOne(user);
+
+      if (user.role === "athlete") {
+        const teamId = user.reqTeamId;
+
+        const athlete = {
+          athleteEmail: user.email,
+          position: "",
+        };
+
+        const team = await teams.findOneAndUpdate(
+          {
+            _id: new ObjectId(teamId),
+          },
+          {
+            $push: { athletes: athlete },
+          },
+          { returnDocument: "after" }
+        );
+
+        const athleteData = {
+          athleteEmail: user.email,
+          tryoutStage: "Initial",
+          scholarship: "Not Offered",
+        };
+
+        const roster = await teamRoster.findOneAndUpdate(
+          { teamId: new ObjectId(teamId) },
+          { $push: { athletes: athleteData } },
+          { returnDocument: "after" }
+        );
+
+        console.log({ roster, team });
+      }
+
       res.send(result);
     });
 
@@ -1450,9 +1455,17 @@ async function run() {
                 foreignField: "email",
                 as: "coachData",
               },
+              $lookup: {
+                from: "teamRoster",
+                localField: "_id",
+                foreignField: "teamId",
+                as: "rosterData",
+              },
             },
           ])
           .toArray();
+
+        console.log({ result });
 
         res.send(result);
       } catch (error) {
@@ -1477,16 +1490,16 @@ async function run() {
       }
     });
 
-    app.get("/teams/:adminEmail", verifyJWT, async (req, res) => {
+    // get teams for specific coaches
+    app.get("/teams/coach-team/:coachEmail", verifyJWT, async (req, res) => {
       try {
-        const adminEmail = req.params.adminEmail;
+        const coachEmail = req.params.coachEmail;
 
-        // Use aggregation to fetch teams and populate coach data
         const result = await teams
           .aggregate([
             {
               $match: {
-                adminEmail: adminEmail,
+                coaches: { $in: [coachEmail] },
               },
             },
             {
@@ -1496,26 +1509,14 @@ async function run() {
                 foreignField: "email",
                 as: "coachData",
               },
+              $lookup: {
+                from: "teamRoster",
+                localField: "_id",
+                foreignField: "teamId",
+                as: "rosterData",
+              },
             },
           ])
-          .toArray();
-
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching teams with coach data:", error);
-        res.status(500).send({
-          error: "An error occurred while fetching teams with coach data.",
-        });
-      }
-    });
-
-    // get teams for specific coaches
-    app.get("/teams/coach-team/:coachEmail", verifyJWT, async (req, res) => {
-      try {
-        const coachEmail = req.params.coachEmail;
-
-        const result = await teams
-          .find({ coaches: { $in: [coachEmail] } })
           .toArray();
 
         res.send(result);
@@ -1531,13 +1532,63 @@ async function run() {
       async (req, res) => {
         try {
           const athleteEmail = req.params.athleteEmail;
+          // const result = await teams
+          //   .find({
+          //     athletes: {
+          //       $elemMatch: { athleteEmail: athleteEmail },
+          //     },
+          //   })
+          //   .toArray();
           const result = await teams
-            .find({
-              athletes: {
-                $elemMatch: { athleteEmail: athleteEmail },
+            .aggregate([
+              {
+                $match: {
+                  athletes: {
+                    $elemMatch: { athleteEmail: athleteEmail },
+                  },
+                },
               },
-            })
+              {
+                $lookup: {
+                  from: "teamRoster",
+                  localField: "_id",
+                  foreignField: "teamId",
+                  as: "rosterData",
+                },
+              },
+              {
+                $unwind: "$rosterData",
+              },
+              {
+                $match: {
+                  "rosterData.athletes.athleteEmail": athleteEmail,
+                },
+              },
+              {
+                $addFields: {
+                  rosterInfo: {
+                    $filter: {
+                      input: "$rosterData.athletes",
+                      as: "athlete",
+                      cond: { $eq: ["$$athlete.athleteEmail", athleteEmail] },
+                    },
+                  },
+                },
+              },
+              {
+                $addFields: {
+                  "rosterInfo.tryoutStartDate": "$rosterData.tryoutStartDate",
+                },
+              },
+              {
+                $project: {
+                  rosterData: 0, // Exclude rosterData as it's not needed in the final output
+                },
+              },
+            ])
             .toArray();
+
+          console.log({ temaFpr: result[0].rosterInfo });
 
           res.send(result);
         } catch (error) {
@@ -1546,12 +1597,54 @@ async function run() {
       }
     );
 
-    // add teams to db
+    //NOTE: add teams to db
     app.post("/teams", verifyJWT, verifyAdminOrCoach, async (req, res) => {
-      const data = req.body;
-      console.log({ data });
-      const result = await teams.insertOne(data);
-      res.send(result);
+      try {
+        const data = req.body;
+        console.log({ data });
+
+        const team = await teams.insertOne(data.teamData);
+        console.log({ team });
+        const roster = data.rosterData;
+        const rosterData = {
+          ...roster,
+          teamId: team.insertedId,
+          createdAt: new Date(),
+        };
+
+        console.log({ rosterData });
+
+        const response = await teamRoster.insertOne(rosterData);
+
+        res.status(200).json(response);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    app.patch("/update/teamRoster/:teamId", async (req, res) => {
+      const { teamId } = req.params;
+      const rosterData = req.body;
+      console.log({ rosterData });
+      try {
+        const data = await teamRoster.findOneAndUpdate(
+          { teamId: new ObjectId(teamId) },
+          { $set: { ...rosterData } },
+          { upsert: true, new: true }
+        );
+
+        console.log({ data });
+
+        res.status(200).json({
+          message: "team updated",
+        });
+      } catch (error) {
+        console.log(error);
+        res
+          .status(500)
+
+          .json({ message: error.message });
+      }
     });
 
     app.patch("/teams/team-position/:teamId", async (req, res) => {
