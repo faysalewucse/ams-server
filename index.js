@@ -1246,40 +1246,6 @@ async function run() {
       }
 
       const result = await users.insertOne(user);
-
-      if (user.role === "athlete") {
-        const teamId = user.reqTeamId;
-
-        const athleteData = {
-          athleteEmail: user.email,
-          tryoutStage: "Initial",
-          scholarship: "Not Offered",
-        };
-
-        const athlete = {
-          athleteEmail: user.email,
-          position: "",
-        };
-
-        const team = await teams.findOneAndUpdate(
-          {
-            _id: new ObjectId(teamId),
-          },
-          {
-            $push: { athletes: athlete },
-          },
-          { returnDocument: "after" }
-        );
-
-        const roster = await teamRoster.findOneAndUpdate(
-          { teamId: new ObjectId(teamId) },
-          { $push: { athletes: athleteData } },
-          { returnDocument: "after" }
-        );
-
-        console.log({ roster, team });
-      }
-
       res.send(result);
     });
 
@@ -1532,13 +1498,63 @@ async function run() {
       async (req, res) => {
         try {
           const athleteEmail = req.params.athleteEmail;
+          // const result = await teams
+          //   .find({
+          //     athletes: {
+          //       $elemMatch: { athleteEmail: athleteEmail },
+          //     },
+          //   })
+          //   .toArray();
           const result = await teams
-            .find({
-              athletes: {
-                $elemMatch: { athleteEmail: athleteEmail },
+            .aggregate([
+              {
+                $match: {
+                  athletes: {
+                    $elemMatch: { athleteEmail: athleteEmail },
+                  },
+                },
               },
-            })
+              {
+                $lookup: {
+                  from: "teamRoster",
+                  localField: "_id",
+                  foreignField: "teamId",
+                  as: "rosterData",
+                },
+              },
+              {
+                $unwind: "$rosterData",
+              },
+              {
+                $match: {
+                  "rosterData.athletes.athleteEmail": athleteEmail,
+                },
+              },
+              {
+                $addFields: {
+                  rosterInfo: {
+                    $filter: {
+                      input: "$rosterData.athletes",
+                      as: "athlete",
+                      cond: { $eq: ["$$athlete.athleteEmail", athleteEmail] },
+                    },
+                  },
+                },
+              },
+              {
+                $addFields: {
+                  "rosterInfo.tryoutStartDate": "$rosterData.tryoutStartDate",
+                },
+              },
+              {
+                $project: {
+                  rosterData: 0, // Exclude rosterData as it's not needed in the final output
+                },
+              },
+            ])
             .toArray();
+
+          console.log({ temaFpr: result[0].rosterInfo });
 
           res.send(result);
         } catch (error) {
