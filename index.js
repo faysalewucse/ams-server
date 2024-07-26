@@ -23,7 +23,7 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5003;
 
 const server = app.listen(port, () => {
   console.log(`AMS Server listening on port ${port}`);
@@ -250,8 +250,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-      ? 20
-      : 0;
+        ? 20
+        : 0;
 
   let coupon;
 
@@ -752,7 +752,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) {}
+          } catch (error) { }
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
@@ -1298,7 +1298,7 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
