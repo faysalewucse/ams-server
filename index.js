@@ -1246,6 +1246,43 @@ async function run() {
       }
 
       const result = await users.insertOne(user);
+
+
+      if (user.role === "athlete") {
+        const t = 0;
+        const teamId = user.reqTeamId;
+
+        const athlete = {
+          athleteEmail: user.email,
+          position: "",
+        };
+
+        const team = await teams.findOneAndUpdate(
+          {
+            _id: new ObjectId(teamId),
+          },
+          {
+            $push: { athletes: athlete },
+          },
+          { returnDocument: "after" }
+        );
+
+        const athleteData = {
+          athleteEmail: user.email,
+          tryoutStage: "Initial",
+          scholarship: "Not Offered",
+        };
+
+        const roster = await teamRoster.findOneAndUpdate(
+          { teamId: new ObjectId(teamId) },
+          { $push: { athletes: athleteData } },
+          { returnDocument: "after" }
+        );
+
+        console.log({ roster, team });
+      }
+
+
       res.send(result);
     });
 
@@ -1547,6 +1584,7 @@ async function run() {
           //   ])
           //   .toArray();
 
+
           const res2 = await teamRoster
             .aggregate([
               {
@@ -1593,11 +1631,13 @@ async function run() {
             ])
             .toArray();
 
+
           console.log(res2);
 
           console.log({ res2 });
 
           res.send(res2);
+
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
         }
