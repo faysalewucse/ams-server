@@ -1539,7 +1539,7 @@ async function run() {
           //     },
           //   })
           //   .toArray();
-          const result = await teams
+          const result2 = await teams
             .aggregate([
               {
                 $match: {
@@ -1588,9 +1588,9 @@ async function run() {
             ])
             .toArray();
 
-          console.log({ temaFpr: result[0].rosterInfo });
+          console.log({ temaFpr: result2[0].rosterInfo });
 
-          res.send(result);
+          res.send(result2);
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
         }
