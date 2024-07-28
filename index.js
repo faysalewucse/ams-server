@@ -1248,6 +1248,7 @@ async function run() {
       const result = await users.insertOne(user);
 
       if (user.role === "athlete") {
+        const t = 0;
         const teamId = user.reqTeamId;
 
         const athlete = {
