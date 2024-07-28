@@ -23,7 +23,7 @@ require("dotenv").config();
 const app = express();
 app.use(cors());
 
-const port = process.env.PORT || 5000;
+const port = process.env.PORT || 5003;
 
 const server = app.listen(port, () => {
   console.log(`AMS Server listening on port ${port}`);
@@ -1247,6 +1247,7 @@ async function run() {
 
       const result = await users.insertOne(user);
 
+
       if (user.role === "athlete") {
         const t = 0;
         const teamId = user.reqTeamId;
@@ -1280,6 +1281,7 @@ async function run() {
 
         console.log({ roster, team });
       }
+
 
       res.send(result);
     });
@@ -1534,13 +1536,56 @@ async function run() {
         try {
           const athleteEmail = req.params.athleteEmail;
           // const result = await teams
-          //   .find({
-          //     athletes: {
-          //       $elemMatch: { athleteEmail: athleteEmail },
+          //   .aggregate([
+          //     {
+          //       $match: {
+          //         athletes: {
+          //           $elemMatch: { athleteEmail: athleteEmail },
+          //         },
+          //       },
           //     },
-          //   })
+          //     {
+          //       $lookup: {
+          //         from: "teamRoster",
+          //         localField: "_id",
+          //         foreignField: "teamId",
+          //         as: "rosterData",
+          //       },
+          //     },
+          //     {
+          //       $unwind: "$rosterData",
+          //     },
+          //     {
+          //       $match: {
+          //         "rosterData.athletes.athleteEmail": athleteEmail,
+          //       },
+          //     },
+          //     {
+          //       $addFields: {
+          //         rosterInfo: {
+          //           $filter: {
+          //             input: "$rosterData.athletes",
+          //             as: "athlete",
+          //             cond: { $eq: ["$$athlete.athleteEmail", athleteEmail] },
+          //           },
+          //         },
+          //       },
+          //     },
+          //     {
+          //       $addFields: {
+          //         "rosterInfo.tryoutStartDate": "$rosterData.tryoutStartDate",
+          //       },
+          //     },
+          //     {
+          //       $project: {
+          //         rosterData: 0, // Exclude rosterData as it's not needed in the final output
+          //       },
+          //     },
+          //   ])
           //   .toArray();
-          const result2 = await teams
+
+
+          const res2 = await teamRoster
             .aggregate([
               {
                 $match: {
@@ -1551,47 +1596,48 @@ async function run() {
               },
               {
                 $lookup: {
-                  from: "teamRoster",
-                  localField: "_id",
-                  foreignField: "teamId",
-                  as: "rosterData",
+                  from: "teams",
+                  localField: "teamId",
+                  foreignField: "_id",
+                  as: "teamData",
                 },
               },
               {
-                $unwind: "$rosterData",
-              },
-              {
-                $match: {
-                  "rosterData.athletes.athleteEmail": athleteEmail,
-                },
+                $unwind: "$teamData",
               },
               {
                 $addFields: {
                   rosterInfo: {
-                    $filter: {
-                      input: "$rosterData.athletes",
-                      as: "athlete",
-                      cond: { $eq: ["$$athlete.athleteEmail", athleteEmail] },
-                    },
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$athletes",
+                          as: "athlete",
+                          cond: {
+                            $eq: ["$$athlete.athleteEmail", athleteEmail],
+                          },
+                        },
+                      },
+                      0,
+                    ],
                   },
                 },
               },
               {
-                $addFields: {
-                  "rosterInfo.tryoutStartDate": "$rosterData.tryoutStartDate",
-                },
-              },
-              {
                 $project: {
-                  rosterData: 0, // Exclude rosterData as it's not needed in the final output
+                  athletes: 0,
                 },
               },
             ])
             .toArray();
 
-          console.log({ temaFpr: result2[0].rosterInfo });
 
-          res.send(result2);
+          console.log(res2);
+
+          console.log({ res2 });
+
+          res.send(res2);
+
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
         }
@@ -1602,18 +1648,15 @@ async function run() {
     app.post("/teams", verifyJWT, verifyAdminOrCoach, async (req, res) => {
       try {
         const data = req.body;
-        console.log({ data });
 
         const team = await teams.insertOne(data.teamData);
-        console.log({ team });
+
         const roster = data.rosterData;
         const rosterData = {
           ...roster,
           teamId: team.insertedId,
           createdAt: new Date(),
         };
-
-        console.log({ rosterData });
 
         const response = await teamRoster.insertOne(rosterData);
 
@@ -1626,15 +1669,13 @@ async function run() {
     app.patch("/update/teamRoster/:teamId", async (req, res) => {
       const { teamId } = req.params;
       const rosterData = req.body;
-      console.log({ rosterData });
+
       try {
         const data = await teamRoster.findOneAndUpdate(
           { teamId: new ObjectId(teamId) },
           { $set: { ...rosterData } },
           { upsert: true, new: true }
         );
-
-        console.log({ data });
 
         res.status(200).json({
           message: "team updated",
