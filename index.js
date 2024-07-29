@@ -64,7 +64,7 @@ const client = new MongoClient(uri, {
   },
 });
 
-client.connect();
+client.connect().catch((err) => console.log(err));
 
 const database = client.db("overtimeDB");
 const users = database.collection("users");
@@ -1235,8 +1235,6 @@ async function run() {
     app.post("/user", async (req, res) => {
       const user = req.body;
 
-      console.log({ user });
-
       const existingUser = await users.findOne({ email: user.email });
       console.log({ existingUser });
       if (existingUser) {
@@ -1247,28 +1245,29 @@ async function run() {
 
       const result = await users.insertOne(user);
 
-
       if (user.role === "athlete") {
-        const t = 0;
         const teamId = user.reqTeamId;
 
-        const athlete = {
-          athleteEmail: user.email,
-          position: "",
-        };
+        //ommited team integration due to the new rule of team athletes. Athlete would be added to the roster first and ater the tryout, it would be added to the team
 
-        const team = await teams.findOneAndUpdate(
-          {
-            _id: new ObjectId(teamId),
-          },
-          {
-            $push: { athletes: athlete },
-          },
-          { returnDocument: "after" }
-        );
+        // const athlete = {
+        //   athleteEmail: user.email,
+        //   position: "",
+        // };
+
+        // const team = await teams.findOneAndUpdate(
+        //   {
+        //     _id: new ObjectId(teamId),
+        //   },
+        //   {
+        //     $push: { athletes: athlete },
+        //   },
+        //   { returnDocument: "after" }
+        // );
 
         const athleteData = {
           athleteEmail: user.email,
+          athleteName: user.fullName,
           tryoutStage: "Initial",
           scholarship: "Not Offered",
         };
@@ -1279,12 +1278,50 @@ async function run() {
           { returnDocument: "after" }
         );
 
-        console.log({ roster, team });
+        console.log({ roster, teams });
       }
-
 
       res.send(result);
     });
+
+    app.patch(
+      "/update-athlete-stage/:teamId",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        try {
+          const athleteEmails = req.body.athleteEmails;
+
+          const newTryoutStage = req.body.stage;
+
+          const teamId = req.params.teamId;
+
+          const result = await teamRoster.updateOne(
+            { teamId: new ObjectId(teamId) },
+            {
+              $set: {
+                "athletes.$[elem].tryoutStage": newTryoutStage,
+              },
+            },
+            {
+              arrayFilters: [{ "elem.athleteEmail": { $in: athleteEmails } }],
+              returnDocument: "after",
+            }
+          );
+
+          console.log("Updated Document:", result);
+
+          res.status(200).json({
+            message: "Updated Successfully",
+          });
+        } catch (error) {
+          console.log(error);
+          res.status(500).json({
+            message: error.message,
+          });
+        }
+      }
+    );
 
     // change user role
     app.patch(
@@ -1584,7 +1621,6 @@ async function run() {
           //   ])
           //   .toArray();
 
-
           const res2 = await teamRoster
             .aggregate([
               {
@@ -1631,13 +1667,11 @@ async function run() {
             ])
             .toArray();
 
-
           console.log(res2);
 
           console.log({ res2 });
 
           res.send(res2);
-
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
         }
@@ -2636,6 +2670,8 @@ async function run() {
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Successfully connected to MongoDB!");
+  } catch (error) {
+    console.log("Error in server", error);
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
