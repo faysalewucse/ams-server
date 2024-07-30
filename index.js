@@ -1177,6 +1177,7 @@ async function run() {
                   as: "teams",
                 },
               },
+
               {
                 $replaceRoot: {
                   newRoot: "$$ROOT",
@@ -1248,27 +1249,26 @@ async function run() {
       if (user.role === "athlete") {
         const teamId = user.reqTeamId;
 
-        //ommited team integration due to the new rule of team athletes. Athlete would be added to the roster first and ater the tryout, it would be added to the team
+        const athlete = {
+          athleteEmail: user.email,
+          athleteName: user.fullName,
+          position: "",
+          scholarship: "Not Offered",
+        };
 
-        // const athlete = {
-        //   athleteEmail: user.email,
-        //   position: "",
-        // };
-
-        // const team = await teams.findOneAndUpdate(
-        //   {
-        //     _id: new ObjectId(teamId),
-        //   },
-        //   {
-        //     $push: { athletes: athlete },
-        //   },
-        //   { returnDocument: "after" }
-        // );
+        const team = await teams.findOneAndUpdate(
+          {
+            _id: new ObjectId(teamId),
+          },
+          {
+            $push: { athletes: athlete },
+          },
+          { returnDocument: "after" }
+        );
 
         const athleteData = {
           athleteEmail: user.email,
           athleteName: user.fullName,
-          tryoutStage: "Initial",
           scholarship: "Not Offered",
         };
 
@@ -1281,6 +1281,22 @@ async function run() {
         console.log({ roster, teams });
       }
 
+      if (user.regType === "Invited") {
+        await invitedUsers.findOneAndUpdate(
+          {
+            _id: new ObjectId(user.inviteId),
+          },
+          {
+            $set: {
+              status: "accepted",
+            },
+          },
+          {
+            upsert: true,
+          }
+        );
+      }
+
       res.send(result);
     });
 
@@ -1290,26 +1306,152 @@ async function run() {
       verifyAdminOrCoach,
       async (req, res) => {
         try {
-          const athleteEmails = req.body.athleteEmails;
-
+          const athleteData = req.body.athleteData; // Rename to a more generic name
           const newTryoutStage = req.body.stage;
-
           const teamId = req.params.teamId;
+
+          // Step 1: Retrieve the current list of athletes
+          const team = await teams.findOne({
+            _id: new ObjectId(teamId),
+          });
+          if (!team) {
+            return res.status(500).send("Team not found");
+          }
+
+          // Determine if athleteData is an array of emails or objects with email and scholarship
+          const isSimpleEmailList = athleteData.every(
+            (item) => typeof item === "string"
+          );
+
+          console.log({ isSimpleEmailList });
+
+          // Extract emails and create a map for scholarship data if provided
+          const athleteEmails = isSimpleEmailList
+            ? athleteData
+            : athleteData.map((item) => item.athleteEmail);
+
+          const scholarshipMap = isSimpleEmailList
+            ? {}
+            : athleteData.reduce((map, item) => {
+                map[item.athleteEmail] = item.scholarship;
+                return map;
+              }, {});
+
+          // Step 2: Filter the athletes to only include those whose emails are in athleteEmails
+
+          const filteredAthletes = team.athletes.filter((athlete) =>
+            athleteEmails.includes(athlete.athleteEmail)
+          );
+
+          // Step 3: Update the scholarship (if provided) for the filtered athletes
+          const updatedAthletes = filteredAthletes.map((athlete) => ({
+            ...athlete,
+            ...(scholarshipMap[athlete.athleteEmail] && {
+              scholarship: scholarshipMap[athlete.athleteEmail],
+            }),
+          }));
+
+          // Step 4: Update the document to set the filtered and updated list of athletes and the new tryoutStage
+
+          const result2 = await teams.findOneAndUpdate(
+            {
+              _id: new ObjectId(teamId),
+            },
+            { $set: { athletes: updatedAthletes } },
+            { returnDocument: "after" }
+          );
 
           const result = await teamRoster.updateOne(
             { teamId: new ObjectId(teamId) },
-            {
-              $set: {
-                "athletes.$[elem].tryoutStage": newTryoutStage,
+            [
+              {
+                $set: {
+                  tryoutStage: newTryoutStage,
+                  athletes: {
+                    $map: {
+                      input: {
+                        $filter: {
+                          input: "$athletes",
+                          as: "athlete",
+                          cond: {
+                            $in: ["$$athlete.athleteEmail", athleteEmails],
+                          },
+                        },
+                      },
+                      as: "athlete",
+                      in: {
+                        $mergeObjects: [
+                          "$$athlete",
+                          {
+                            scholarship: {
+                              $ifNull: [
+                                {
+                                  $arrayElemAt: [
+                                    scholarshipMap["$$athlete.athleteEmail"],
+                                    0,
+                                  ],
+                                },
+                                "$$athlete.scholarship",
+                              ],
+                            },
+                          },
+                        ],
+                      },
+                    },
+                  },
+                },
               },
-            },
-            {
-              arrayFilters: [{ "elem.athleteEmail": { $in: athleteEmails } }],
-              returnDocument: "after",
-            }
+            ]
           );
 
-          console.log("Updated Document:", result);
+          console.log({ result });
+
+          //NOTE:implement send mail
+
+          //           try {
+          //             filteredAthletes.map(async (athlete) => {
+          //               const mailText = isSimpleEmailList
+          //                 ? `<p>
+          //       Dear <strong>${athlete.athleteName}</strong> ,<br><br>
+          //       You have been selected for Secondary Tryout Stage for team ${team.teamName}
+
+          //       Thank you!<br>
+          //       OverTime Athletic Management
+          //     </p>`
+          //                 : `<p>
+          //    Dear <strong>${athlete.athleteName}</strong> ,<br><br>
+          //      Congratulations! You have been selected for Final Tryout Stage for team ${
+          //        team.teamName
+          //      }
+
+          //      <br><br>
+          //      Scholarhsip: <strong>${scholarshipMap[athlete.athleteEmail]}</strong>
+          //      <br><br>
+
+          //       Thank you!<br>
+
+          //   Powered by Overtime Athletic Management
+          // </p>`;
+          //               const recipientEmail = bodyData.lessThan18
+          //                 ? bodyData.parentEmail
+          //                 : bodyData.athleteEmail;
+
+          //               try {
+          //                 const resMail = await sendMail(
+          //                   recipientEmail,
+          //                   subject,
+          //                   mailText
+          //                 );
+          //                 console.log("Mail sent successfully", resMail);
+          //               } catch (mailError) {
+          //                 console.error("Error sending mail", mailError);
+          //                 return res.status(500).send({
+          //                   error:
+          //                     "An error occurred while sending the invitation email.",
+          //                 });
+          //               }
+          //             });
+          //           } catch (error) {}
 
           res.status(200).json({
             message: "Updated Successfully",
@@ -1505,8 +1647,6 @@ async function run() {
           ])
           .toArray();
 
-        console.log({ result });
-
         res.send(result);
       } catch (error) {
         console.error("Error fetching teams with coach data:", error);
@@ -1565,14 +1705,60 @@ async function run() {
       }
     });
 
-    // get teams for specific athletes
+    //FIXME: get teams for specific athletes
     app.get(
       "/teams/athlete-team/:athleteEmail",
       verifyJWT,
       async (req, res) => {
         try {
           const athleteEmail = req.params.athleteEmail;
-          // const result = await teams
+          const result = await teams
+            .aggregate([
+              {
+                $match: {
+                  "athletes.athleteEmail": athleteEmail,
+                },
+              },
+              {
+                $lookup: {
+                  from: "teamRoster",
+                  localField: "_id",
+                  foreignField: "teamId",
+                  as: "rosterData",
+                },
+              },
+
+              {
+                $addFields: {
+                  athlete: {
+                    $arrayElemAt: [
+                      {
+                        $filter: {
+                          input: "$athletes",
+                          as: "a",
+                          cond: {
+                            $eq: ["$$a.athleteEmail", athleteEmail],
+                          },
+                        },
+                      },
+                      0,
+                    ],
+                  },
+                },
+              },
+
+              // {
+              //   $project: {
+              //     athletes: 0, // Exclude the athletes array
+              //     "rosterData.athletes": 0, // Exclude the athletes from rosterData
+              //     rosterData: 1, // Include the rosterData
+              //     athleteInfo: 1, // Include the filtered athleteInfo
+              //   },
+              // },
+            ])
+            .toArray();
+
+          // const res2 = await teamRoster
           //   .aggregate([
           //     {
           //       $match: {
@@ -1583,95 +1769,42 @@ async function run() {
           //     },
           //     {
           //       $lookup: {
-          //         from: "teamRoster",
-          //         localField: "_id",
-          //         foreignField: "teamId",
-          //         as: "rosterData",
+          //         from: "teams",
+          //         localField: "teamId",
+          //         foreignField: "_id",
+          //         as: "teamData",
           //       },
           //     },
           //     {
-          //       $unwind: "$rosterData",
-          //     },
-          //     {
-          //       $match: {
-          //         "rosterData.athletes.athleteEmail": athleteEmail,
-          //       },
+          //       $unwind: "$teamData",
           //     },
           //     {
           //       $addFields: {
           //         rosterInfo: {
-          //           $filter: {
-          //             input: "$rosterData.athletes",
-          //             as: "athlete",
-          //             cond: { $eq: ["$$athlete.athleteEmail", athleteEmail] },
-          //           },
+          //           $arrayElemAt: [
+          //             {
+          //               $filter: {
+          //                 input: "$athletes",
+          //                 as: "athlete",
+          //                 cond: {
+          //                   $eq: ["$$athlete.athleteEmail", athleteEmail],
+          //                 },
+          //               },
+          //             },
+          //             0,
+          //           ],
           //         },
           //       },
           //     },
           //     {
-          //       $addFields: {
-          //         "rosterInfo.tryoutStartDate": "$rosterData.tryoutStartDate",
-          //       },
-          //     },
-          //     {
           //       $project: {
-          //         rosterData: 0, // Exclude rosterData as it's not needed in the final output
+          //         athletes: 0,
           //       },
           //     },
           //   ])
           //   .toArray();
 
-          const res2 = await teamRoster
-            .aggregate([
-              {
-                $match: {
-                  athletes: {
-                    $elemMatch: { athleteEmail: athleteEmail },
-                  },
-                },
-              },
-              {
-                $lookup: {
-                  from: "teams",
-                  localField: "teamId",
-                  foreignField: "_id",
-                  as: "teamData",
-                },
-              },
-              {
-                $unwind: "$teamData",
-              },
-              {
-                $addFields: {
-                  rosterInfo: {
-                    $arrayElemAt: [
-                      {
-                        $filter: {
-                          input: "$athletes",
-                          as: "athlete",
-                          cond: {
-                            $eq: ["$$athlete.athleteEmail", athleteEmail],
-                          },
-                        },
-                      },
-                      0,
-                    ],
-                  },
-                },
-              },
-              {
-                $project: {
-                  athletes: 0,
-                },
-              },
-            ])
-            .toArray();
-
-          console.log(res2);
-
-          console.log({ res2 });
-
-          res.send(res2);
+          res.send(result);
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
         }
