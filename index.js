@@ -888,8 +888,8 @@ async function run() {
 
           const token = invited.insertedId;
 
-          const link = `http://localhost:3000/register?token=${invited.insertedId}`;
-          // const link = `https://overtimeam.com/register?token=${invited.insertedId}`;
+          // const link = `http://localhost:3000/register?token=${invited.insertedId}`;
+          const link = `https://overtimeam.com/register?token=${invited.insertedId}`;
 
           const subject = "Invitation";
 
@@ -1141,8 +1141,6 @@ async function run() {
         const adminEmail = req.query.adminEmail || "";
         const parentsEmail = req.query.parentsEmail || "";
 
-        console.log(superAdmin);
-
         let matchWith = { role: roleToFind };
         if (!superAdmin && !parentsEmail) {
           matchWith.adminEmail = adminEmail;
@@ -1308,6 +1306,7 @@ async function run() {
         try {
           const athleteData = req.body.athleteData; // Rename to a more generic name
           const newTryoutStage = req.body.stage;
+          console.log({ newTryoutStage });
           const teamId = req.params.teamId;
 
           // Step 1: Retrieve the current list of athletes
@@ -1319,23 +1318,18 @@ async function run() {
           }
 
           // Determine if athleteData is an array of emails or objects with email and scholarship
-          const isSimpleEmailList = athleteData.every(
-            (item) => typeof item === "string"
-          );
-
-          console.log({ isSimpleEmailList });
 
           // Extract emails and create a map for scholarship data if provided
-          const athleteEmails = isSimpleEmailList
-            ? athleteData
-            : athleteData.map((item) => item.athleteEmail);
+          const athleteEmails = athleteData.map((item) => item.athleteEmail);
 
-          const scholarshipMap = isSimpleEmailList
-            ? {}
-            : athleteData.reduce((map, item) => {
-                map[item.athleteEmail] = item.scholarship;
-                return map;
-              }, {});
+          console.log({ athleteData });
+
+          const scholarshipMap = athleteData.reduce((map, item) => {
+            map[item.athleteEmail] = item.scholarship;
+            return map;
+          }, {});
+
+          console.log({ scholarshipMap });
 
           // Step 2: Filter the athletes to only include those whose emails are in athleteEmails
 
@@ -1353,7 +1347,7 @@ async function run() {
 
           // Step 4: Update the document to set the filtered and updated list of athletes and the new tryoutStage
 
-          const result2 = await teams.findOneAndUpdate(
+          await teams.findOneAndUpdate(
             {
               _id: new ObjectId(teamId),
             },
@@ -1361,97 +1355,48 @@ async function run() {
             { returnDocument: "after" }
           );
 
-          const result = await teamRoster.updateOne(
-            { teamId: new ObjectId(teamId) },
-            [
-              {
-                $set: {
-                  tryoutStage: newTryoutStage,
-                  athletes: {
-                    $map: {
-                      input: {
-                        $filter: {
-                          input: "$athletes",
-                          as: "athlete",
-                          cond: {
-                            $in: ["$$athlete.athleteEmail", athleteEmails],
-                          },
-                        },
-                      },
-                      as: "athlete",
-                      in: {
-                        $mergeObjects: [
-                          "$$athlete",
-                          {
-                            scholarship: {
-                              $ifNull: [
-                                {
-                                  $arrayElemAt: [
-                                    scholarshipMap["$$athlete.athleteEmail"],
-                                    0,
-                                  ],
-                                },
-                                "$$athlete.scholarship",
-                              ],
-                            },
-                          },
-                        ],
-                      },
-                    },
-                  },
-                },
+          await teamRoster.updateOne({ teamId: new ObjectId(teamId) }, [
+            {
+              $set: {
+                tryoutStage: newTryoutStage,
               },
-            ]
+            },
+          ]);
+
+          console.log({ updatedAthletes });
+
+          await Promise.all(
+            updatedAthletes.map(async (athlete) => {
+              const mailText = `<p>
+                Dear <strong>${athlete.athleteName}</strong> ,<br><br>
+                You have been selected for Round ${newTryoutStage} Tryout Stage for team ${team.teamName}
+
+              <br> 
+              <strong>Scholarhsip Status: </strong> ${athlete.scholarship}  <br> <br>
+
+                Thank you!<br>
+                OverTime Athletic Management
+              </p>`;
+
+              const recipientEmail = athlete.athleteEmail;
+              const subject = "Roster Update";
+
+              try {
+                const resMail = await sendMail(
+                  recipientEmail,
+                  subject,
+                  mailText
+                );
+                console.log("Mail sent successfully", resMail);
+              } catch (mailError) {
+                console.error("Error sending mail", mailError);
+                return res.status(500).send({
+                  message:
+                    "An error occurred while sending the invitation email.",
+                });
+              }
+            })
           );
-
-          console.log({ result });
-
-          //NOTE:implement send mail
-
-          //           try {
-          //             filteredAthletes.map(async (athlete) => {
-          //               const mailText = isSimpleEmailList
-          //                 ? `<p>
-          //       Dear <strong>${athlete.athleteName}</strong> ,<br><br>
-          //       You have been selected for Secondary Tryout Stage for team ${team.teamName}
-
-          //       Thank you!<br>
-          //       OverTime Athletic Management
-          //     </p>`
-          //                 : `<p>
-          //    Dear <strong>${athlete.athleteName}</strong> ,<br><br>
-          //      Congratulations! You have been selected for Final Tryout Stage for team ${
-          //        team.teamName
-          //      }
-
-          //      <br><br>
-          //      Scholarhsip: <strong>${scholarshipMap[athlete.athleteEmail]}</strong>
-          //      <br><br>
-
-          //       Thank you!<br>
-
-          //   Powered by Overtime Athletic Management
-          // </p>`;
-          //               const recipientEmail = bodyData.lessThan18
-          //                 ? bodyData.parentEmail
-          //                 : bodyData.athleteEmail;
-
-          //               try {
-          //                 const resMail = await sendMail(
-          //                   recipientEmail,
-          //                   subject,
-          //                   mailText
-          //                 );
-          //                 console.log("Mail sent successfully", resMail);
-          //               } catch (mailError) {
-          //                 console.error("Error sending mail", mailError);
-          //                 return res.status(500).send({
-          //                   error:
-          //                     "An error occurred while sending the invitation email.",
-          //                 });
-          //               }
-          //             });
-          //           } catch (error) {}
 
           res.status(200).json({
             message: "Updated Successfully",
