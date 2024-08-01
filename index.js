@@ -1159,6 +1159,7 @@ async function run() {
             roleToFind === "athlete") &&
           teamCount !== 0
         ) {
+          console.log({ matchWith });
           const coachesWithTeams = await users
             .aggregate([
               {
@@ -1582,6 +1583,8 @@ async function run() {
                 foreignField: "email",
                 as: "coachData",
               },
+            },
+            {
               $lookup: {
                 from: "teamRoster",
                 localField: "_id",
@@ -1634,6 +1637,8 @@ async function run() {
                 foreignField: "email",
                 as: "coachData",
               },
+            },
+            {
               $lookup: {
                 from: "teamRoster",
                 localField: "_id",
