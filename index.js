@@ -20,8 +20,26 @@ const upload = multer({ storage });
 
 require("dotenv").config();
 
+var allowlist = [
+  "https://overtimeam.com/",
+  "overtimeam.com/",
+  "http://localhost:3000",
+];
+const corsOptionsDelegate = function (req, callback) {
+  let corsOptions = {
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  };
+  if (allowlist.indexOf(req.header("Origin")) !== -1) {
+    corsOptions = { ...corsOptions, origin: true }; // reflect (enable) the requested origin in the CORS response
+  } else {
+    corsOptions = { ...corsOptions, origin: false }; // disable CORS for this request
+  }
+  callback(null, corsOptions); // callback expects two parameters: error and options
+};
+
 const app = express();
-app.use(cors());
+app.use(cors(corsOptionsDelegate));
 
 const port = process.env.PORT || 5003;
 
