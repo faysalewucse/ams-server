@@ -85,6 +85,7 @@ const prices = database.collection("prices");
 const stripeAccount = database.collection("stripeAccount");
 const invitedUsers = database.collection("invitedUsers");
 const teamRoster = database.collection("teamRoster");
+const inventory = database.collection("inventory");
 
 app.post(
   "/webhooks",
@@ -250,8 +251,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-      ? 20
-      : 0;
+        ? 20
+        : 0;
 
   let coupon;
 
@@ -752,7 +753,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) {}
+          } catch (error) { }
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
@@ -1460,7 +1461,7 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
@@ -1915,6 +1916,68 @@ async function run() {
       } catch (error) {
         console.error(error.message);
         res.status(500).send("An error has occurred!");
+      }
+    });
+
+
+
+
+    // inventory
+    //NOTE: add inventory
+    app.post("/inventory", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      try {
+        const data = req.body;
+
+
+        const inventoryData = {
+          ...data,
+          createdAt: new Date(),
+        };
+
+        const response = await inventory.insertOne(inventoryData);
+
+        res.status(200).json(response);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+
+    // Get all inventories
+    app.get("/inventory", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      try {
+        const cursor = inventory.find();
+        const result = await cursor.toArray();
+        console.log({ result })
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching teams:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching teams." });
+      }
+    });
+
+
+    // Update inventory by ID
+    app.put('/inventory/:id', verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      try {
+        const result = await inventory.findOneAndUpdate(
+          { _id: new ObjectId(id) },
+          { $set: updateData },
+          { returnDocument: 'after' }
+        );
+
+        if (!result.value) {
+          return res.status(404).send({ message: 'Inventory not found' });
+        }
+
+        res.status(200).send(result.value);
+      } catch (error) {
+        res.status(500).send({ message: 'Error updating Inventory', error });
       }
     });
 
