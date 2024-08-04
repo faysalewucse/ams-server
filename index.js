@@ -21,8 +21,8 @@ const upload = multer({ storage });
 require("dotenv").config();
 
 var allowlist = [
-  "https://overtimeam.com/",
-  "overtimeam.com/",
+  "https://overtimeam.com",
+  "overtimeam.com",
   "http://localhost:3000",
 ];
 const corsOptionsDelegate = function (req, callback) {
