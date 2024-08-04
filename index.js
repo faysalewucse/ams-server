@@ -20,8 +20,26 @@ const upload = multer({ storage });
 
 require("dotenv").config();
 
+var allowlist = [
+  "https://overtimeam.com/",
+  "overtimeam.com/",
+  "http://localhost:3000",
+];
+const corsOptionsDelegate = function (req, callback) {
+  let corsOptions = {
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  };
+  if (allowlist.indexOf(req.header("Origin")) !== -1) {
+    corsOptions = { ...corsOptions, origin: true }; // reflect (enable) the requested origin in the CORS response
+  } else {
+    corsOptions = { ...corsOptions, origin: false }; // disable CORS for this request
+  }
+  callback(null, corsOptions); // callback expects two parameters: error and options
+};
+
 const app = express();
-app.use(cors());
+app.use(cors(corsOptionsDelegate));
 
 const port = process.env.PORT || 5003;
 
@@ -1160,7 +1178,6 @@ async function run() {
             roleToFind === "athlete") &&
           teamCount !== 0
         ) {
-          console.log({ matchWith });
           const coachesWithTeams = await users
             .aggregate([
               {
@@ -1246,40 +1263,40 @@ async function run() {
 
       const result = await users.insertOne(user);
 
-      if (user.role === "athlete") {
-        const teamId = user.reqTeamId;
+      // if (user.role === "athlete") {
+      //   const teamId = user.reqTeamId;
 
-        const athlete = {
-          athleteEmail: user.email,
-          athleteName: user.fullName,
-          position: "",
-          scholarship: "Not Offered",
-        };
+      //   const athlete = {
+      //     athleteEmail: user.email,
+      //     athleteName: user.fullName,
+      //     position: "",
+      //     scholarship: "Not Offered",
+      //   };
 
-        const team = await teams.findOneAndUpdate(
-          {
-            _id: new ObjectId(teamId),
-          },
-          {
-            $push: { athletes: athlete },
-          },
-          { returnDocument: "after" }
-        );
+      //   const team = await teams.findOneAndUpdate(
+      //     {
+      //       _id: new ObjectId(teamId),
+      //     },
+      //     {
+      //       $push: { athletes: athlete },
+      //     },
+      //     { returnDocument: "after" }
+      //   );
 
-        const athleteData = {
-          athleteEmail: user.email,
-          athleteName: user.fullName,
-          scholarship: "Not Offered",
-        };
+      //   // const athleteData = {
+      //   //   athleteEmail: user.email,
+      //   //   athleteName: user.fullName,
+      //   //   scholarship: "Not Offered",
+      //   // };
 
-        const roster = await teamRoster.findOneAndUpdate(
-          { teamId: new ObjectId(teamId) },
-          { $push: { athletes: athleteData } },
-          { returnDocument: "after" }
-        );
+      //   // const roster = await teamRoster.findOneAndUpdate(
+      //   //   { teamId: new ObjectId(teamId) },
+      //   //   { $push: { athletes: athleteData } },
+      //   //   { returnDocument: "after" }
+      //   // );
 
-        console.log({ roster, teams });
-      }
+      //   console.log({ roster, teams });
+      // }
 
       if (user.regType === "Invited") {
         await invitedUsers.findOneAndUpdate(
@@ -1324,19 +1341,36 @@ async function run() {
           // Extract emails and create a map for scholarship data if provided
           const athleteEmails = athleteData.map((item) => item.athleteEmail);
 
-          console.log({ athleteData });
-
           const scholarshipMap = athleteData.reduce((map, item) => {
             map[item.athleteEmail] = item.scholarship;
             return map;
           }, {});
 
-          console.log({ scholarshipMap });
-
           // Step 2: Filter the athletes to only include those whose emails are in athleteEmails
 
           const filteredAthletes = team.athletes.filter((athlete) =>
             athleteEmails.includes(athlete.athleteEmail)
+          );
+
+          const deletedAthletes = team.athletes.filter(
+            (athlete) => !athleteEmails.includes(athlete.athleteEmail)
+          );
+
+          const deletedAthletesEmails = deletedAthletes.map(
+            (athlete) => athlete.athleteEmail
+          );
+
+          console.log({ deletedAthletesEmails });
+
+          const updateUser = await users.updateMany(
+            {
+              email: { $in: deletedAthletesEmails },
+            },
+            {
+              $pull: {
+                teamIds: teamId,
+              },
+            }
           );
 
           // Step 3: Update the scholarship (if provided) for the filtered athletes
@@ -1486,6 +1520,7 @@ async function run() {
       }
     });
 
+    //NOTE:assign team
     app.patch(
       "/athlete/assignTeam/:athleteEmail",
       verifyJWT,
@@ -1495,13 +1530,45 @@ async function run() {
         const teamIds = req.body;
 
         try {
+          const existingUser = await users.findOne({
+            email: athleteEmail,
+          });
+
+          if (!existingUser) {
+            return res.status(500).json({ message: "User Not Found" });
+          }
+
+          const existingTeamIds = existingUser.teamIds || [];
+          const newTeamIds = [...existingTeamIds, ...teamIds];
+
+          console.log({ newTeamIds });
           // Convert teamIds from an array of strings to an array of ObjectIds
           const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
           // Update the teams collection to push the coach's email
           const result = await teams.updateMany(
             { _id: { $in: teamObjectIds } }, // Match teams by their IDs
-            { $push: { athletes: { athleteEmail, position: "" } } } // Push coachEmail to the coaches array
+            {
+              $push: {
+                athletes: {
+                  athleteEmail,
+                  athleteName: existingUser.fullName,
+                  position: "",
+                  scholarship: "Not Offered",
+                },
+              },
+            } // Push coachEmail to the coaches array
+          );
+
+          const userUpdate = await users.updateOne(
+            {
+              email: athleteEmail,
+            },
+            {
+              $set: {
+                teamIds: newTeamIds,
+              },
+            }
           );
 
           res.send(result);
@@ -1879,7 +1946,7 @@ async function run() {
       }
     );
 
-    // remove athlete from team
+    //NOTE: remove athlete from team
     app.delete(
       "/teams/athlete/:athleteEmail",
       verifyJWT,
@@ -1888,6 +1955,25 @@ async function run() {
         try {
           const athleteEmail = req.params.athleteEmail;
           const teamId = req.query.teamId;
+
+          const existingUser = await users.findOne({
+            email: athleteEmail,
+          });
+
+          if (!existingUser) {
+            return res.status(500).json({ message: "User Not Found" });
+          }
+
+          const userUpdate = await users.updateOne(
+            {
+              email: athleteEmail,
+            },
+            {
+              $pull: {
+                teamIds: teamId,
+              },
+            }
+          );
 
           const result = await teams.updateOne(
             { _id: new ObjectId(teamId) },
@@ -1919,70 +2005,66 @@ async function run() {
       }
     });
 
-
-
-
-    // inventory
-    //NOTE: add inventory
-    app.post("/inventory", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+    // NOTE: ============ Events =========
+    app.get("/events/:tId", verifyJWT, async (req, res) => {
       try {
-        const data = req.body;
+        const tId = req.params.tId;
 
+        const Ids = tId.split(",");
 
-        const inventoryData = {
-          ...data,
-          createdAt: new Date(),
-        };
+        const result = await events
+          .aggregate([
+            {
+              $match: { teamId: { $in: Ids } },
+            },
+            {
+              $addFields: {
+                isAllTeam: { $eq: ["$teamId", "all"] }, // Add a flag to identify "all" teamId
+              },
+            },
+            {
+              $lookup: {
+                from: "teams",
+                let: {
+                  teamId: {
+                    $cond: [
+                      { $eq: ["$isAllTeam", true] },
+                      null,
+                      { $toObjectId: "$teamId" },
+                    ],
+                  },
+                },
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$_id", { $ifNull: ["$$teamId", "$_id"] }] }, // Match by ObjectId if not "all"
+                          { $ne: ["$teamId", "all"] }, // Skip if "all" teamId
+                        ],
+                      },
+                    },
+                  },
+                ],
+                as: "teamDetails",
+              },
+            },
+            {
+              $sort: { _id: -1 }, // Sort the results if needed
+            },
+          ])
+          .toArray();
 
-        const response = await inventory.insertOne(inventoryData);
-
-        res.status(200).json(response);
+        res.json(result);
       } catch (error) {
-        res.status(500).json({ message: error.message });
-      }
-    });
-
-
-    // Get all inventories
-    app.get("/inventory", verifyJWT, verifyAdminOrCoach, async (req, res) => {
-      try {
-        const cursor = inventory.find();
-        const result = await cursor.toArray();
-        console.log({ result })
-        res.send(result);
-      } catch (error) {
-        console.error("Error fetching teams:", error);
+        console.error("Error fetching events:", error);
         res
           .status(500)
-          .send({ error: "An error occurred while fetching teams." });
+          .json({ error: "An error occurred while fetching events." });
       }
     });
 
-
-    // Update inventory by ID
-    app.put('/inventory/:id', verifyJWT, verifyAdminOrCoach, async (req, res) => {
-      const { id } = req.params;
-      const updateData = req.body;
-
-      try {
-        const result = await inventory.findOneAndUpdate(
-          { _id: new ObjectId(id) },
-          { $set: updateData },
-          { returnDocument: 'after' }
-        );
-
-        if (!result.value) {
-          return res.status(404).send({ message: 'Inventory not found' });
-        }
-
-        res.status(200).send(result.value);
-      } catch (error) {
-        res.status(500).send({ message: 'Error updating Inventory', error });
-      }
-    });
-
-    // ============ Events =========
-    app.get("/events/:adminEmail", verifyJWT, async (req, res) => {
+    app.get("/admin/events/:adminEmail", verifyJWT, async (req, res) => {
       try {
         const adminEmail = req.params.adminEmail;
 
@@ -2013,7 +2095,9 @@ async function run() {
                     $match: {
                       $expr: {
                         $and: [
-                          { $eq: ["$_id", { $ifNull: ["$$teamId", "$_id"] }] }, // Match by ObjectId if not "all"
+                          {
+                            $eq: ["$_id", { $ifNull: ["$$teamId", "$_id"] }],
+                          }, // Match by ObjectId if not "all"
                           { $ne: ["$teamId", "all"] }, // Skip if "all" teamId
                         ],
                       },
@@ -2322,6 +2406,66 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while deleting the trip." });
+      }
+    });
+
+
+    // inventory
+    //NOTE: add inventory
+    app.post("/inventory", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      try {
+        const data = req.body;
+
+
+        const inventoryData = {
+          ...data,
+          createdAt: new Date(),
+        };
+
+        const response = await inventory.insertOne(inventoryData);
+
+        res.status(200).json(response);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+
+    // Get all inventories
+    app.get("/inventory", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      try {
+        const cursor = inventory.find();
+        const result = await cursor.toArray();
+        console.log({ result })
+        res.send(result);
+      } catch (error) {
+        console.error("Error fetching teams:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching teams." });
+      }
+    });
+
+
+    // Update inventory by ID
+    app.put('/inventory/:id', verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      const { id } = req.params;
+      const updateData = req.body;
+
+      try {
+        const result = await inventory.findOneAndUpdate(
+          { _id: new ObjectId(id) },
+          { $set: updateData },
+          { returnDocument: 'after' }
+        );
+
+        if (!result.value) {
+          return res.status(404).send({ message: 'Inventory not found' });
+        }
+
+        res.status(200).send(result.value);
+      } catch (error) {
+        res.status(500).send({ message: 'Error updating Inventory', error });
       }
     });
 
