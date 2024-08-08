@@ -16,6 +16,8 @@ const stripe = require("stripe")(
 
 const crypto = require("crypto");
 
+const cron = require("node-cron");
+
 const upload = multer({ storage });
 
 require("dotenv").config();
@@ -1655,8 +1657,24 @@ async function run() {
             {
               $lookup: {
                 from: "teamRoster",
-                localField: "_id",
-                foreignField: "teamId",
+                let: { teamId: "$_id" }, // Pass teamId as a variable to the $lookup
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$teamId", "$$teamId"] }, // Match documents where teamId is equal to the teamId in the teams collection
+                          {
+                            $or: [
+                              { $eq: ["$isArchived", false] }, // Include documents where isArchive is false
+                              { $not: { $gt: ["$isArchived", false] } }, // Include documents where isArchive is missing or not set to true
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
                 as: "rosterData",
               },
             },
@@ -1709,8 +1727,24 @@ async function run() {
             {
               $lookup: {
                 from: "teamRoster",
-                localField: "_id",
-                foreignField: "teamId",
+                let: { teamId: "$_id" }, // Pass teamId as a variable to the $lookup
+                pipeline: [
+                  {
+                    $match: {
+                      $expr: {
+                        $and: [
+                          { $eq: ["$teamId", "$$teamId"] }, // Match documents where teamId is equal to the teamId in the teams collection
+                          {
+                            $or: [
+                              { $eq: ["$isArchived", false] }, // Include documents where isArchive is false
+                              { $not: { $gt: ["$isArchived", false] } }, // Include documents where isArchive is missing or not set to true
+                            ],
+                          },
+                        ],
+                      },
+                    },
+                  },
+                ],
                 as: "rosterData",
               },
             },
@@ -1740,8 +1774,24 @@ async function run() {
               {
                 $lookup: {
                   from: "teamRoster",
-                  localField: "_id",
-                  foreignField: "teamId",
+                  let: { teamId: "$_id" }, // Pass teamId as a variable to the $lookup
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $eq: ["$teamId", "$$teamId"] }, // Match documents where teamId is equal to the teamId in the teams collection
+                            {
+                              $or: [
+                                { $eq: ["$isArchived", false] }, // Include documents where isArchive is false
+                                { $not: { $gt: ["$isArchived", false] } }, // Include documents where isArchive is missing or not set to true
+                              ],
+                            },
+                          ],
+                        },
+                      },
+                    },
+                  ],
                   as: "rosterData",
                 },
               },
@@ -1840,6 +1890,7 @@ async function run() {
         const rosterData = {
           ...roster,
           teamId: team.insertedId,
+          isArchived: false,
           createdAt: new Date(),
         };
 
@@ -3033,3 +3084,85 @@ async function run() {
   }
 }
 run().catch(console.dir);
+
+//NOTE:cron
+cron.schedule("0 12 * * *", async () => {
+  console.log("Running the cron job for archiving team data.");
+  const currentDate = new Date();
+  currentDate.setUTCHours(0, 0, 0, 0);
+
+  await teamRoster.updateMany({ offSeasonStartDate: { $type: "string" } }, [
+    { $set: { offSeasonStartDate: { $toDate: "$offSeasonStartDate" } } },
+  ]);
+
+  const teamRosterToArchive = await teamRoster
+    .find({
+      offSeasonStartDate: { $lte: currentDate },
+      $or: [
+        { isArchived: { $ne: true } }, // isArchive is either false or not present
+        { isArchived: { $exists: false } }, // isArchive does not exist
+      ],
+    })
+    .toArray();
+
+  // console.log({ teamRosterToArchive });
+
+  for (roster of teamRosterToArchive) {
+    //extract team athletes
+    const team = await teams.findOne({ _id: roster.teamId });
+    const prevAthletes = team.athletes;
+
+    // console.log({ team });
+    // console.log({ prevAthletes });
+
+    //update the existing roster as archived
+
+    const updateRoster = await teamRoster.findOneAndUpdate(
+      {
+        _id: roster._id,
+      },
+      {
+        $set: {
+          archivedAthletes: prevAthletes,
+          isArchived: true,
+          archiveDate: currentDate,
+        },
+      }
+    );
+
+    //update team
+    const teamUpdated = await teams.findOneAndUpdate(
+      {
+        _id: roster.teamId,
+      },
+      {
+        $set: {
+          athletes: null,
+        },
+      }
+    );
+
+    //create new Roster
+
+    const newRosterData = {
+      // _id: new ObjectId(oid()),
+      teamId: roster.teamId,
+      offSeasonEndDate: null,
+      offSeasonStartDate: null,
+      offerScholarships: false,
+      postSeasonEndDate: null,
+      postSeasonStartDate: null,
+      preSeasonEndDate: null,
+      preSeasonStartDate: null,
+      rosterMaximumCount: 10,
+      tryoutStage: 1,
+      seasonEndDate: null,
+      seasonStartDate: null,
+      tryoutStartDate: null,
+      createdAt: currentDate,
+      isArchived: false,
+    };
+
+    const insertedData = await teamRoster.insertOne(newRosterData);
+  }
+});
