@@ -271,8 +271,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-      ? 20
-      : 0;
+        ? 20
+        : 0;
 
   let coupon;
 
@@ -773,7 +773,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) {}
+          } catch (error) { }
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
@@ -981,7 +981,7 @@ async function run() {
       const user = req.body;
       console.log("useruseruser", req.body);
       const token = jwt.sign(user, process.env.JWT_SECRET_KEY, {
-        expiresIn: "10m",
+        expiresIn: "1h",
       });
       res.send({ token });
     });
@@ -1497,7 +1497,7 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
