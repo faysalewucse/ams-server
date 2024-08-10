@@ -106,6 +106,7 @@ const stripeAccount = database.collection("stripeAccount");
 const invitedUsers = database.collection("invitedUsers");
 const teamRoster = database.collection("teamRoster");
 const inventory = database.collection("inventory");
+const schedules = database.collection("schedules");
 
 app.post(
   "/webhooks",
@@ -2584,6 +2585,44 @@ async function run() {
         }
       }
     );
+
+    // schedules
+    app.post("/schedules", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      try {
+        const data = req.body;
+
+
+
+        const scheduleData = {
+          ...data,
+          createdAt: new Date(),
+        };
+
+        const response = await schedules.insertOne(scheduleData);
+
+        res.status(200).json(response);
+      } catch (error) {
+        res.status(500).json({ message: error.message });
+      }
+    });
+
+    app.get("/schedules/:email", verifyJWT, async (req, res) => {
+      try {
+        const email = req.params.email;
+
+        const result = await schedules
+          .find({ addedBy: email })
+          .sort({ _id: -1 })
+          .toArray();
+        res.json(result);
+      } catch (error) {
+        console.error("Error fetching schedules:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching schedules." });
+      }
+    });
+
 
     // ============ Notifications =========
     app.get("/notifications/:adminEmail", verifyJWT, async (req, res) => {
