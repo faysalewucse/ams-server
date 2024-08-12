@@ -272,8 +272,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-        ? 20
-        : 0;
+      ? 20
+      : 0;
 
   let coupon;
 
@@ -774,7 +774,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) { }
+          } catch (error) {}
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
@@ -1498,13 +1498,27 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
       const teamIds = req.body;
 
       try {
+        const existingUser = await users.findOne({
+          email: coachEmail,
+        });
+
+        if (!existingUser) {
+          return res.status(500).json({ message: "User Not Found" });
+        }
+
+        const existingTeamIds = existingUser.teamIds || [];
+        const newTeamIds = Array.from(
+          new Set([...existingTeamIds, ...teamIds])
+        );
+
+        console.log({ newTeamIds });
         // Convert teamIds from an array of strings to an array of ObjectIds
         const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
@@ -1512,6 +1526,20 @@ async function run() {
         const result = await teams.updateMany(
           { _id: { $in: teamObjectIds } }, // Match teams by their IDs
           { $push: { coaches: coachEmail } } // Push coachEmail to the coaches array
+        );
+
+        const userUpdate = await users.updateOne(
+          {
+            email: coachEmail,
+          },
+          {
+            $set: {
+              teamIds: newTeamIds,
+            },
+          },
+          {
+            upsert: true,
+          }
         );
 
         res.send(result);
@@ -1542,7 +1570,9 @@ async function run() {
           }
 
           const existingTeamIds = existingUser.teamIds || [];
-          const newTeamIds = [...existingTeamIds, ...teamIds];
+          const newTeamIds = Array.from(
+            new Set([...existingTeamIds, ...teamIds])
+          );
 
           console.log({ newTeamIds });
           // Convert teamIds from an array of strings to an array of ObjectIds
@@ -1571,6 +1601,9 @@ async function run() {
               $set: {
                 teamIds: newTeamIds,
               },
+            },
+            {
+              upsert: true,
             }
           );
 
@@ -1579,6 +1612,82 @@ async function run() {
           console.error("Error assigning teams to coach:", error);
           res.status(500).send({
             error: "An error occurred while assigning teams to coach.",
+          });
+        }
+      }
+    );
+
+    //NOTE:invte ath from ros
+    app.patch(
+      "/inviteRoster/assignTeam",
+      verifyJWT,
+      verifyCoach,
+      async (req, res) => {
+        const athleteData = req.body.athleteData;
+
+        console.log({ athleteData });
+
+        try {
+          // Array to store promises for updating teams and users
+          const promises = athleteData.map(async ({ athleteEmail, team }) => {
+            const teamObjectId = new ObjectId(team);
+
+            // Find the existing user
+            const existingUser = await users.findOne({ email: athleteEmail });
+
+            if (!existingUser) {
+              throw new Error(`User with email ${athleteEmail} not found`);
+            }
+
+            const existingTeamIds = existingUser.teamIds || [];
+
+            // If the team is already assigned to the athlete, skip the update
+            if (!existingTeamIds.includes(team)) {
+              existingTeamIds.push(team);
+
+              // Update the user with the new team ID
+              await users.updateOne(
+                { email: athleteEmail },
+                { $set: { teamIds: existingTeamIds } }
+              );
+            }
+
+            // Add the athlete to the team's roster
+            await teams.updateOne(
+              { _id: teamObjectId },
+              {
+                $addToSet: {
+                  athletes: {
+                    athleteEmail,
+                    athleteName: existingUser.fullName,
+                    position: "", // Add other necessary fields as required
+                    scholarship: "Not Offered",
+                  },
+                },
+              },
+              {
+                upsert: true,
+              }
+            );
+            await teamRoster.updateOne(
+              { teamId: team, "archivedAthletes.athleteEmail": athleteEmail },
+              {
+                $set: {
+                  "archivedAthletes.$.isInvited": true,
+                },
+              }
+            );
+          });
+
+          // Wait for all updates to complete
+          await Promise.all(promises);
+
+          res.send({ message: "Athletes assigned to teams successfully" });
+        } catch (error) {
+          console.error("Error assigning athletes to teams:", error);
+          res.status(500).send({
+            message: "An error occurred while assigning athletes to teams.",
+            details: error.message,
           });
         }
       }
@@ -1601,6 +1710,22 @@ async function run() {
             { _id: new ObjectId(teamId) }, // Match the team by its ID
             { $push: { coaches: { $each: coachEmailStrings } } } // Set the coaches property to the provided coachEmails
           );
+
+          await coachEmailStrings.map(async (coachEmail) => {
+            console.log({ teamId });
+            const updatedCoach = await users.updateOne(
+              {
+                email: coachEmail,
+              },
+              {
+                $addToSet: {
+                  teamIds: teamId,
+                },
+              }
+            );
+
+            console.log(updatedCoach);
+          });
 
           res.send(result);
         } catch (error) {
@@ -1827,52 +1952,6 @@ async function run() {
             ])
             .toArray();
 
-          // const res2 = await teamRoster
-          //   .aggregate([
-          //     {
-          //       $match: {
-          //         athletes: {
-          //           $elemMatch: { athleteEmail: athleteEmail },
-          //         },
-          //       },
-          //     },
-          //     {
-          //       $lookup: {
-          //         from: "teams",
-          //         localField: "teamId",
-          //         foreignField: "_id",
-          //         as: "teamData",
-          //       },
-          //     },
-          //     {
-          //       $unwind: "$teamData",
-          //     },
-          //     {
-          //       $addFields: {
-          //         rosterInfo: {
-          //           $arrayElemAt: [
-          //             {
-          //               $filter: {
-          //                 input: "$athletes",
-          //                 as: "athlete",
-          //                 cond: {
-          //                   $eq: ["$$athlete.athleteEmail", athleteEmail],
-          //                 },
-          //               },
-          //             },
-          //             0,
-          //           ],
-          //         },
-          //       },
-          //     },
-          //     {
-          //       $project: {
-          //         athletes: 0,
-          //       },
-          //     },
-          //   ])
-          //   .toArray();
-
           res.send(result);
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
@@ -1925,6 +2004,121 @@ async function run() {
           .json({ message: error.message });
       }
     });
+
+    //NOTE:archived roster
+    app.get(
+      "/archived-rosters/coach/:coachEmail",
+      verifyJWT,
+      async (req, res) => {
+        try {
+          const coachEmail = req.params.coachEmail;
+
+          const result = await teams
+            .aggregate([
+              {
+                $match: {
+                  coaches: { $in: [coachEmail] },
+                },
+              },
+              {
+                $lookup: {
+                  from: "users",
+                  localField: "coaches",
+                  foreignField: "email",
+                  as: "coachData",
+                },
+              },
+              {
+                $lookup: {
+                  from: "teamRoster",
+                  let: { teamId: "$_id" },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $eq: ["$teamId", "$$teamId"] }, // Ensure that both are of the same type
+                            { $eq: ["$isArchived", true] },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                  as: "rosterData",
+                },
+              },
+              {
+                $match: {
+                  "rosterData.0": { $exists: true }, // Ensure that only teams with archived rosters are returned
+                },
+              },
+            ])
+            .toArray();
+
+          console.log({ rosters: result });
+          res.send(result);
+        } catch (error) {
+          res.status(500).send({ error: "An error has occurred" });
+        }
+      }
+    );
+
+    app.get(
+      "/archived-rosters/admin/:adminEmail",
+      verifyJWT,
+      async (req, res) => {
+        try {
+          const adminEmail = req.params.adminEmail;
+
+          const result = await teams
+            .aggregate([
+              {
+                $match: {
+                  adminEmail: adminEmail,
+                },
+              },
+              {
+                $lookup: {
+                  from: "users",
+                  localField: "coaches",
+                  foreignField: "email",
+                  as: "coachData",
+                },
+              },
+              {
+                $lookup: {
+                  from: "teamRoster",
+                  let: { teamId: "$_id" },
+                  pipeline: [
+                    {
+                      $match: {
+                        $expr: {
+                          $and: [
+                            { $eq: ["$teamId", "$$teamId"] }, // Ensure that both are of the same type
+                            { $eq: ["$isArchived", true] },
+                          ],
+                        },
+                      },
+                    },
+                  ],
+                  as: "rosterData",
+                },
+              },
+              {
+                $match: {
+                  "rosterData.0": { $exists: true }, // Ensure that only teams with archived rosters are returned
+                },
+              },
+            ])
+            .toArray();
+
+          console.log({ rosters: result });
+          res.send(result);
+        } catch (error) {
+          res.status(500).send({ error: "An error has occurred" });
+        }
+      }
+    );
 
     app.patch("/teams/team-position/:teamId", async (req, res) => {
       const { teamId } = req.params;
@@ -1989,6 +2183,17 @@ async function run() {
           const result = await teams.updateOne(
             { _id: new ObjectId(teamId) },
             { $pull: { coaches: coachEmail } }
+          );
+
+          const userUpdate = await users.updateOne(
+            {
+              email: coachEmail,
+            },
+            {
+              $pull: {
+                teamIds: teamId,
+              },
+            }
           );
           res.send(result);
         } catch (error) {
@@ -2497,11 +2702,91 @@ async function run() {
                 },
               },
               {
+                $addFields: {
+                  assignedTeams: {
+                    $map: {
+                      input: "$assignedTeams",
+                      as: "teamId",
+                      in: { $toObjectId: "$$teamId" },
+                    },
+                  },
+                  location: { $toObjectId: "$location" },
+                },
+              },
+              {
                 $lookup: {
                   from: "teams",
-                  localField: "assignedTo",
+                  localField: "assignedTeams",
                   foreignField: "_id",
                   as: "teamData",
+                },
+              },
+              {
+                $lookup: {
+                  from: "schedules",
+                  localField: "location",
+                  foreignField: "_id",
+                  as: "locationData",
+                },
+              },
+            ])
+            .toArray();
+
+          console.log({ result });
+
+          res.send(result);
+        } catch (error) {
+          console.error("Error fetching inventory:", error);
+          res
+            .status(500)
+            .send({ error: "An error occurred while fetching teams." });
+        }
+      }
+    );
+    app.get(
+      "/inventory/coach/:coachEmail",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        try {
+          const coachEmail = req.params.coachEmail;
+
+          const existingUser = await users.findOne({ email: coachEmail });
+          const teamIds = existingUser.teamIds;
+
+          const result = await inventory
+            .aggregate([
+              {
+                $match: {
+                  assignedTeams: { $in: teamIds },
+                },
+              },
+              {
+                $addFields: {
+                  assignedTeams: {
+                    $map: {
+                      input: "$assignedTeams",
+                      as: "teamId",
+                      in: { $toObjectId: "$$teamId" },
+                    },
+                  },
+                  location: { $toObjectId: "$location" },
+                },
+              },
+              {
+                $lookup: {
+                  from: "teams",
+                  localField: "assignedTeams",
+                  foreignField: "_id",
+                  as: "teamData",
+                },
+              },
+              {
+                $lookup: {
+                  from: "schedules",
+                  localField: "location",
+                  foreignField: "_id",
+                  as: "locationData",
                 },
               },
             ])
@@ -2529,9 +2814,33 @@ async function run() {
         const updateData = req.body;
 
         try {
+          const existingInventory = await inventory.findOne({
+            _id: new ObjectId(id),
+          });
+
+          if (!existingInventory) {
+            return res
+              .status(500)
+              .json({ message: "No existing inventory found!" });
+          }
+
+          let updateFields = {
+            $set: updateData,
+          };
+
+          if (updateData.hasOwnProperty("quantity")) {
+            const newQuantity = Number(updateData.quantity);
+            if (newQuantity > 0) {
+              updateFields.$set.status = "CheckedIn";
+              updateFields.$set.CheckedInDate = new Date();
+            }
+          }
+
+          // Check if the quantity becomes 0 and update status and CheckedOutDate
+
           const result = await inventory.findOneAndUpdate(
             { _id: new ObjectId(id) },
-            { $set: updateData },
+            updateFields,
             { returnDocument: "after" }
           );
 
@@ -2567,20 +2876,163 @@ async function run() {
               .json({ message: "No existing inventory found!" });
           }
 
-          const existingTeamIds = existingInventory.assignedTo || [];
-          const newTeamIds = [...existingTeamIds, ...selectedTeam];
-
-          console.log({ existingTeamIds, selectedTeam });
+          // const existingTeamIds = existingInventory.assignedTo || [];
+          // const newTeamIds = [...existingTeamIds, ...selectedTeam];
 
           const result = await inventory.findOneAndUpdate(
             { _id: new ObjectId(existingInventory._id) },
-            { $set: { assignedTo: newTeamIds } }
+            { $addToSet: { assignedTeams: { $each: selectedTeam } } }
           );
-
-          console.log({ result });
 
           res.status(200).send(result);
         } catch (error) {
+          res.status(500).send({ message: "Error updating Inventory", error });
+        }
+      }
+    );
+
+    app.patch(
+      "/inventory/assignAthletes/:id",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        const { id } = req.params;
+        console.log({ id });
+        const selectedAthletes = req.body;
+        console.log({ selectedAthletes });
+
+        try {
+          const existingInventory = await inventory.findOne({
+            _id: new ObjectId(id),
+          });
+
+          if (!existingInventory) {
+            return res
+              .status(500)
+              .json({ message: "No existing inventory found!" });
+          }
+
+          if (existingInventory.quantity < selectedAthletes.length) {
+            return res.status(500).json({ message: "Inventory stocks out!" });
+          }
+
+          const newQuantity =
+            Number(existingInventory.quantity) - selectedAthletes.length;
+          const updateFields = {
+            $addToSet: {
+              assignedAthletes: { $each: selectedAthletes },
+            },
+            $set: {
+              quantity: newQuantity,
+            },
+          };
+
+          // Check if the quantity becomes 0 and update status and CheckedOutDate
+          if (newQuantity === 0) {
+            updateFields.$set.status = "CheckedOut";
+            updateFields.$set.CheckedOutDate = new Date();
+          }
+
+          const result = await inventory.findOneAndUpdate(
+            { _id: new ObjectId(existingInventory._id) },
+            updateFields,
+            { returnDocument: "after" } // to return the updated document
+          );
+
+          res.status(200).send(result);
+        } catch (error) {
+          console.error("Error updating Inventory:", error);
+          res.status(500).send({ message: "Error updating Inventory", error });
+        }
+      }
+    );
+
+    app.patch(
+      "/inventory/removeAthlete/:id",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        const { id } = req.params;
+        console.log({ id });
+        const athleteEmail = req.body;
+        console.log({ athleteEmail });
+
+        try {
+          const existingInventory = await inventory.findOne({
+            _id: new ObjectId(id),
+          });
+
+          if (!existingInventory) {
+            return res
+              .status(500)
+              .json({ message: "No existing inventory found!" });
+          }
+
+          const newQuantity = Number(existingInventory.quantity) + 1;
+          const updateFields = {
+            $pull: {
+              assignedAthletes: athleteEmail,
+            },
+            $set: {
+              quantity: newQuantity,
+            },
+          };
+
+          // Check if the quantity becomes 0 and update status and CheckedOutDate
+          if (newQuantity > 0) {
+            updateFields.$set.status = "CheckedIn";
+            updateFields.$set.CheckedInDate = new Date();
+          }
+
+          const result = await inventory.findOneAndUpdate(
+            { _id: new ObjectId(existingInventory._id) },
+            updateFields,
+            { returnDocument: "after" } // to return the updated document
+          );
+
+          res.status(200).send(result);
+        } catch (error) {
+          console.error("Error updating Inventory:", error);
+          res.status(500).send({ message: "Error updating Inventory", error });
+        }
+      }
+    );
+
+    app.patch(
+      "/inventory/removeTeam/:id",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        const { id } = req.params;
+        console.log({ id });
+        const { teamId } = req.body;
+        console.log(req.body);
+
+        try {
+          console.log(teamId);
+          if (!teamId) {
+            return res.status(500).json({ message: "No teamId found!" });
+          }
+
+          const existingInventory = await inventory.findOne({
+            _id: new ObjectId(id),
+          });
+
+          if (!existingInventory) {
+            return res
+              .status(500)
+              .json({ message: "No existing inventory found!" });
+          }
+
+          const result = await inventory.findOneAndUpdate(
+            { _id: new ObjectId(existingInventory._id) },
+            { $pull: { assignedTeams: teamId } },
+            { returnDocument: "after" } // to return the updated document
+          );
+
+          res.status(200).send(result);
+        } catch (error) {
+          console.error("Error updating Inventory:", error);
           res.status(500).send({ message: "Error updating Inventory", error });
         }
       }
@@ -2590,8 +3042,6 @@ async function run() {
     app.post("/schedules", verifyJWT, verifyAdminOrCoach, async (req, res) => {
       try {
         const data = req.body;
-
-
 
         const scheduleData = {
           ...data,
@@ -2622,7 +3072,6 @@ async function run() {
           .json({ error: "An error occurred while fetching schedules." });
       }
     });
-
 
     // ============ Notifications =========
     app.get("/notifications/:adminEmail", verifyJWT, async (req, res) => {
@@ -3126,82 +3575,86 @@ run().catch(console.dir);
 
 //NOTE:cron
 cron.schedule("0 12 * * *", async () => {
-  console.log("Running the cron job for archiving team data.");
-  const currentDate = new Date();
-  currentDate.setUTCHours(0, 0, 0, 0);
+  try {
+    console.log("Running the cron job for archiving team data.");
+    const currentDate = new Date();
+    currentDate.setUTCHours(0, 0, 0, 0);
 
-  await teamRoster.updateMany({ offSeasonStartDate: { $type: "string" } }, [
-    { $set: { offSeasonStartDate: { $toDate: "$offSeasonStartDate" } } },
-  ]);
+    await teamRoster.updateMany({ offSeasonStartDate: { $type: "string" } }, [
+      { $set: { offSeasonStartDate: { $toDate: "$offSeasonStartDate" } } },
+    ]);
 
-  const teamRosterToArchive = await teamRoster
-    .find({
-      offSeasonStartDate: { $lte: currentDate },
-      $or: [
-        { isArchived: { $ne: true } }, // isArchive is either false or not present
-        { isArchived: { $exists: false } }, // isArchive does not exist
-      ],
-    })
-    .toArray();
+    const teamRosterToArchive = await teamRoster
+      .find({
+        offSeasonStartDate: { $lte: currentDate },
+        $or: [
+          { isArchived: { $ne: true } }, // isArchive is either false or not present
+          { isArchived: { $exists: false } }, // isArchive does not exist
+        ],
+      })
+      .toArray();
 
-  // console.log({ teamRosterToArchive });
+    // console.log({ teamRosterToArchive });
 
-  for (roster of teamRosterToArchive) {
-    //extract team athletes
-    const team = await teams.findOne({ _id: roster.teamId });
-    const prevAthletes = team.athletes;
+    for (roster of teamRosterToArchive) {
+      //extract team athletes
+      const team = await teams.findOne({ _id: roster.teamId });
+      const prevAthletes = team.athletes;
 
-    // console.log({ team });
-    // console.log({ prevAthletes });
+      // console.log({ team });
+      // console.log({ prevAthletes });
 
-    //update the existing roster as archived
+      //update the existing roster as archived
 
-    const updateRoster = await teamRoster.findOneAndUpdate(
-      {
-        _id: roster._id,
-      },
-      {
-        $set: {
-          archivedAthletes: prevAthletes,
-          isArchived: true,
-          archiveDate: currentDate,
+      const updateRoster = await teamRoster.findOneAndUpdate(
+        {
+          _id: roster._id,
         },
-      }
-    );
+        {
+          $set: {
+            archivedAthletes: prevAthletes,
+            isArchived: true,
+            archiveDate: currentDate,
+          },
+        }
+      );
 
-    //update team
-    const teamUpdated = await teams.findOneAndUpdate(
-      {
-        _id: roster.teamId,
-      },
-      {
-        $set: {
-          athletes: null,
+      //update team
+      const teamUpdated = await teams.findOneAndUpdate(
+        {
+          _id: roster.teamId,
         },
-      }
-    );
+        {
+          $set: {
+            athletes: [],
+          },
+        }
+      );
 
-    //create new Roster
+      //create new Roster
 
-    const newRosterData = {
-      // _id: new ObjectId(oid()),
-      teamId: roster.teamId,
-      offSeasonEndDate: null,
-      offSeasonStartDate: null,
-      offerScholarships: false,
-      postSeasonEndDate: null,
-      postSeasonStartDate: null,
-      preSeasonEndDate: null,
-      preSeasonStartDate: null,
-      rosterMaximumCount: 10,
-      tryoutStage: 1,
-      seasonEndDate: null,
-      seasonStartDate: null,
-      tryoutStartDate: null,
-      createdAt: currentDate,
-      isArchived: false,
-    };
+      const newRosterData = {
+        // _id: new ObjectId(oid()),
+        teamId: roster.teamId,
+        offSeasonEndDate: null,
+        offSeasonStartDate: null,
+        offerScholarships: false,
+        postSeasonEndDate: null,
+        postSeasonStartDate: null,
+        preSeasonEndDate: null,
+        preSeasonStartDate: null,
+        rosterMaximumCount: 10,
+        tryoutStage: 1,
+        seasonEndDate: null,
+        seasonStartDate: null,
+        tryoutStartDate: null,
+        createdAt: currentDate,
+        isArchived: false,
+      };
 
-    const insertedData = await teamRoster.insertOne(newRosterData);
+      const insertedData = await teamRoster.insertOne(newRosterData);
+    }
+  } catch (error) {
+    console.log("error in cron", error);
   }
 });
