@@ -2787,6 +2787,21 @@ async function run() {
       }
     );
 
+    app.delete("/inventory/del/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await inventory.deleteOne({
+          _id: new ObjectId(id),
+        });
+
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error deleting inventory:", error);
+        res.status(500).json("An error occurred while deleting inventory.");
+      }
+    });
+
     // NOTE: Update inventory by ID
     app.put(
       "/inventory/:id",
