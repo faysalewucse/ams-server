@@ -106,7 +106,7 @@ const stripeAccount = database.collection("stripeAccount");
 const invitedUsers = database.collection("invitedUsers");
 const teamRoster = database.collection("teamRoster");
 const inventory = database.collection("inventory");
-const schedules = database.collection("schedules");
+const reservations = database.collection("reservations");
 
 app.post(
   "/webhooks",
@@ -452,9 +452,8 @@ async function run() {
       try {
         const adminEmail = req.params.adminEmail;
 
-        console.log(adminEmail);
         const pricesData = await prices.find({ addedBy: adminEmail }).toArray();
-        console.log(pricesData);
+
         res.json(pricesData);
       } catch (error) {
         console.error("Error fetching prices:", error);
@@ -485,8 +484,6 @@ async function run() {
       try {
         const { productName, teamId, priceId, stripeAccountId } = req.body;
 
-        console.log("body", req.body);
-
         const baseAmountRaw = await stripe.prices.retrieve(priceId);
         const baseAmount = parseFloat(baseAmountRaw.unit_amount / 100);
 
@@ -498,19 +495,11 @@ async function run() {
         const { stripeFee, platformFee } = fee;
         const totalFee = parseFloat((stripeFee + platformFee).toFixed(2));
 
-        console.log("totalFee before", totalFee);
-
-        console.log("base fee before", baseAmount);
-
         const sessionPromises = athleteEmails.map(async (athleteEmail) => {
           try {
             const roundedFee = parseInt((totalFee * 100).toFixed(2));
 
-            console.log("roundedFee", roundedFee);
-
             const total = parseInt(((baseAmount + totalFee) * 100).toFixed(2));
-
-            console.log("total", total);
 
             const session = await stripe.checkout.sessions.create({
               payment_method_types: ["card"],
@@ -2710,7 +2699,6 @@ async function run() {
                       in: { $toObjectId: "$$teamId" },
                     },
                   },
-                  location: { $toObjectId: "$location" },
                 },
               },
               {
@@ -2721,18 +2709,16 @@ async function run() {
                   as: "teamData",
                 },
               },
-              {
-                $lookup: {
-                  from: "schedules",
-                  localField: "location",
-                  foreignField: "_id",
-                  as: "locationData",
-                },
-              },
+              // {
+              //   $lookup: {
+              //     from: "schedules",
+              //     localField: "location",
+              //     foreignField: "_id",
+              //     as: "locationData",
+              //   },
+              // },
             ])
             .toArray();
-
-          console.log({ result });
 
           res.send(result);
         } catch (error) {
@@ -2770,7 +2756,6 @@ async function run() {
                       in: { $toObjectId: "$$teamId" },
                     },
                   },
-                  location: { $toObjectId: "$location" },
                 },
               },
               {
@@ -2781,18 +2766,16 @@ async function run() {
                   as: "teamData",
                 },
               },
-              {
-                $lookup: {
-                  from: "schedules",
-                  localField: "location",
-                  foreignField: "_id",
-                  as: "locationData",
-                },
-              },
+              // {
+              //   $lookup: {
+              //     from: "schedules",
+              //     localField: "location",
+              //     foreignField: "_id",
+              //     as: "locationData",
+              //   },
+              // },
             ])
             .toArray();
-
-          console.log({ result });
 
           res.send(result);
         } catch (error) {
@@ -3039,37 +3022,76 @@ async function run() {
     );
 
     // schedules
-    app.post("/schedules", verifyJWT, verifyAdminOrCoach, async (req, res) => {
-      try {
-        const data = req.body;
+    app.post(
+      "/reservations",
+      verifyJWT,
+      verifyAdminOrCoach,
+      async (req, res) => {
+        try {
+          const data = req.body;
 
-        const scheduleData = {
-          ...data,
-          createdAt: new Date(),
-        };
+          const scheduleData = {
+            ...data,
+            createdAt: new Date(),
+          };
 
-        const response = await schedules.insertOne(scheduleData);
+          const response = await reservations.insertOne(scheduleData);
 
-        res.status(200).json(response);
-      } catch (error) {
-        res.status(500).json({ message: error.message });
+          res.status(200).json(response);
+        } catch (error) {
+          res.status(500).json({ message: error.message });
+        }
       }
-    });
+    );
 
-    app.get("/schedules/:email", verifyJWT, async (req, res) => {
+    //NOTE:reservations
+
+    app.get("/reservations/:email", verifyJWT, async (req, res) => {
       try {
         const email = req.params.email;
 
-        const result = await schedules
-          .find({ addedBy: email })
-          .sort({ _id: -1 })
+        // const result = await reservations
+        //   .find({ addedBy: email })
+        //   .sort({ _id: -1 })
+        //   .toArray();
+
+        const result = await reservations
+          .aggregate([
+            {
+              $match: {
+                addedBy: email,
+              },
+            },
+            {
+              $lookup: {
+                from: "users",
+                localField: "assignedTo",
+                foreignField: "email",
+                as: "coachData",
+              },
+            },
+          ])
           .toArray();
+
         res.json(result);
       } catch (error) {
-        console.error("Error fetching schedules:", error);
+        console.error("Error fetching reservations:", error);
         res
           .status(500)
-          .json({ error: "An error occurred while fetching schedules." });
+          .json({ error: "An error occurred while fetching reservations." });
+      }
+    });
+
+    app.delete("/reservations/del/:id", verifyJWT, async (req, res) => {
+      try {
+        const id = req.params.id;
+
+        const result = await reservations.deleteOne({ _id: new ObjectId(id) });
+
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error fetching reservations:", error);
+        res.status(500).json("An error occurred while deleting reservations.");
       }
     });
 
