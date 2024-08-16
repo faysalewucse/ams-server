@@ -3108,7 +3108,7 @@ async function run() {
           .aggregate([
             {
               $match: {
-                addedBy: email,
+                adminEmail: email,
               },
             },
             {
@@ -3121,6 +3121,8 @@ async function run() {
             },
           ])
           .toArray();
+
+        
 
         res.json(result);
       } catch (error) {
