@@ -107,6 +107,7 @@ const invitedUsers = database.collection("invitedUsers");
 const teamRoster = database.collection("teamRoster");
 const inventory = database.collection("inventory");
 const reservations = database.collection("reservations");
+const venues = database.collection("venues");
 
 app.post(
   "/webhooks",
@@ -3035,6 +3036,39 @@ async function run() {
         }
       }
     );
+    //venues
+    app.post("/venues", verifyJWT, verifyAdminOrCoach, async (req, res) => {
+      try {
+        const venu = req.body;
+
+        const data = await venues.insertOne(venu);
+        res.status(200).send("Venue is saved ");
+      } catch (error) {
+        res.status(500).send("Something went wrong");
+      }
+    });
+
+    app.get("/venues/:adminEmail", verifyJWT, async (req, res) => {
+      try {
+        const { adminEmail } = req.params;
+
+        const data = await venues.find({ adminEmail }).toArray();
+        res.status(200).send(data);
+      } catch (error) {
+        res.status(500).send("Something went wrong");
+      }
+    });
+
+    app.delete("/venues/del/:id", verifyJWT, async (req, res) => {
+      try {
+        const { id } = req.params;
+
+        const data = await venues.deleteOne({ _id: new ObjectId(id) });
+        res.status(200).send(data);
+      } catch (error) {
+        res.status(500).send("Something went wrong");
+      }
+    });
 
     // schedules
     app.post(
