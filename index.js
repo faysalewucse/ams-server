@@ -2787,6 +2787,28 @@ async function run() {
         }
       }
     );
+    app.get("/inventory/athlete/:athleteEmail", verifyJWT, async (req, res) => {
+      try {
+        const athleteEmail = req.params.athleteEmail;
+
+        const existingUser = await users.findOne({ email: athleteEmail });
+
+        const result = await inventory
+          .find({
+            assignedAthletes: athleteEmail,
+          })
+          .toArray();
+
+        console.log("athl", result);
+
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error fetching teams:", error);
+        res
+          .status(500)
+          .send({ error: "An error occurred while fetching teams." });
+      }
+    });
 
     app.delete("/inventory/del/:id", verifyJWT, async (req, res) => {
       try {
@@ -2946,56 +2968,50 @@ async function run() {
       }
     );
 
-    app.patch(
-      "/inventory/removeAthlete/:id",
-      verifyJWT,
-      verifyAdminOrCoach,
-      async (req, res) => {
-        const { id } = req.params;
-        console.log({ id });
-        const athleteEmail = req.body;
-        console.log({ athleteEmail });
+    app.patch("/inventory/removeAthlete/:id", verifyJWT, async (req, res) => {
+      const { id } = req.params;
+      console.log({ id });
+      const athleteEmail = req.body;
+      console.log({ athleteEmail });
 
-        try {
-          const existingInventory = await inventory.findOne({
-            _id: new ObjectId(id),
-          });
+      try {
+        const existingInventory = await inventory.findOne({
+          _id: new ObjectId(id),
+        });
 
-          if (!existingInventory) {
-            return res
-              .status(500)
-              .json({ message: "No existing inventory found!" });
-          }
-
-          const newQuantity = Number(existingInventory.quantity) + 1;
-          const updateFields = {
-            $pull: {
-              assignedAthletes: athleteEmail,
-            },
-            $set: {
-              quantity: newQuantity,
-            },
-          };
-
-          // Check if the quantity becomes 0 and update status and CheckedOutDate
-          if (newQuantity > 0) {
-            updateFields.$set.status = "CheckedIn";
-            updateFields.$set.CheckedInDate = new Date();
-          }
-
-          const result = await inventory.findOneAndUpdate(
-            { _id: new ObjectId(existingInventory._id) },
-            updateFields,
-            { returnDocument: "after" } // to return the updated document
-          );
-
-          res.status(200).send(result);
-        } catch (error) {
-          console.error("Error updating Inventory:", error);
-          res.status(500).send({ message: "Error updating Inventory", error });
+        if (!existingInventory) {
+          return res
+            .status(500)
+            .json({ message: "No existing inventory found!" });
         }
+
+        const newQuantity = Number(existingInventory.quantity) + 1;
+        const updateFields = {
+          $pull: {
+            assignedAthletes: athleteEmail,
+          },
+          $set: {
+            quantity: newQuantity,
+          },
+        };
+
+        // Check if the quantity becomes 0 and update status and CheckedOutDate
+        if (newQuantity > 0) {
+          updateFields.$set.status = "CheckedIn";
+          updateFields.$set.CheckedInDate = new Date();
+        }
+
+        const result = await inventory.findOneAndUpdate(
+          { _id: new ObjectId(existingInventory._id) },
+          updateFields
+        );
+
+        res.status(200).send(result);
+      } catch (error) {
+        console.error("Error updating Inventory:", error);
+        res.status(500).send({ message: "Error updating Inventory", error });
       }
-    );
+    });
 
     app.patch(
       "/inventory/removeTeam/:id",
@@ -3121,8 +3137,6 @@ async function run() {
             },
           ])
           .toArray();
-
-        
 
         res.json(result);
       } catch (error) {
