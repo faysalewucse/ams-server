@@ -123,7 +123,7 @@ app.post(
         request.body,
         sig,
         // "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
-        "whsec_zOd7n9tv2VRMzfHMPAU06EH93xor1RUC"
+        "whsec_ezrXVONiAHziw4ND9IHRC5C0NflZFfsl"
       );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
@@ -304,6 +304,7 @@ app.post("/create-checkout-session", async (req, res) => {
       ],
       mode: "subscription",
       customer_email: metadata.email,
+      allow_promotion_codes: true,
       success_url: "https://overtimeam.com/dashboard",
       cancel_url: "https://overtimeam.com/payment",
       metadata: metadata || {},
