@@ -273,8 +273,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-      ? 20
-      : 0;
+        ? 20
+        : 0;
 
   let coupon;
 
@@ -765,7 +765,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) {}
+          } catch (error) { }
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
@@ -1489,7 +1489,7 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
@@ -2462,11 +2462,11 @@ async function run() {
             {
               $lookup: {
                 from: "tasks",
-                let: { planId: { $toString: "$_id" } },
+                let: { planId: "$_id" }, // Pass ObjectId directly
                 pipeline: [
                   {
                     $match: {
-                      $expr: { $eq: ["$planId", "$$planId"] },
+                      $expr: { $eq: [{ $toObjectId: "$planId" }, "$$planId"] }, // Convert `planId` in `tasks` to ObjectId
                     },
                   },
                   {
@@ -2503,6 +2503,8 @@ async function run() {
           ])
           .toArray();
 
+        // console.log({ result })
+
         res.json(result);
       } catch (error) {
         console.error("Error fetching plans:", error);
@@ -2511,6 +2513,7 @@ async function run() {
           .json({ error: "An error occurred while fetching plans." });
       }
     });
+
 
     app.post("/plans", verifyJWT, verifyCoach, async (req, res) => {
       try {
@@ -2582,6 +2585,34 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while adding task to the plan." });
+      }
+    });
+
+
+    app.put("/task/:taskId", verifyJWT, async (req, res) => {
+      try {
+        const taskId = req.params.taskId;
+        const updateFields = req.body;
+
+        const taskObjectId = new ObjectId(taskId);
+
+        const result = await tasks.updateOne(
+          { _id: taskObjectId },
+          { $set: updateFields }
+        );
+
+
+
+        if (result.matchedCount === 0) {
+          return res.status(404).json({ error: "Task not found." });
+        }
+
+        res.json({ message: "Task updated successfully.", modifiedCount: result.modifiedCount });
+      } catch (error) {
+        console.error("Error updating plan:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while updating the plan." });
       }
     });
 
