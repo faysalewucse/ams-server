@@ -1821,6 +1821,30 @@ async function run() {
       }
     });
 
+    // app.get("/teams/:id", verifyJWT, async (req, res) => {
+    //   try {
+    //     const id = req.params.id;
+
+
+    //     if (!ObjectId.isValid(id)) {
+    //       return res.status(400).send({ error: "Invalid team ID format." });
+    //     }
+
+
+    //     const team = await teams.findOne({ _id: new ObjectId(id) });
+
+    //     if (!team) {
+    //       return res.status(404).send({ error: "Team not found." });
+    //     }
+
+    //     res.send(team);
+    //   } catch (error) {
+    //     console.error("Error fetching team:", error);
+    //     res
+    //       .status(500)
+    //       .send({ error: "An error occurred while fetching the team." });
+    //   }
+    // });
     // get teams for specific coaches
     app.get("/teams/coach-team/:coachEmail", verifyJWT, async (req, res) => {
       try {
@@ -3380,6 +3404,7 @@ async function run() {
         const email = req.query.addedBy;
         const isArchived = req.query.isArchived;
 
+        // Build the query based on the conditions provided
         let query;
         if (isArchived == "true" && email) {
           query = {
@@ -3399,9 +3424,28 @@ async function run() {
           query = {};
         }
 
-        const result = await formLibrary.find(query).toArray();
 
-        if (result) {
+        const result = await formLibrary.aggregate([
+          { $match: query },
+          {
+            $addFields: {
+              teamId: { $toObjectId: "$teamId" },
+            },
+          },
+          {
+            $lookup: {
+              from: "teams",
+              localField: "teamId",
+              foreignField: "_id",
+              as: "teamInfo",
+            },
+          },
+          {
+            $unwind: { path: "$teamInfo", preserveNullAndEmptyArrays: true },
+          },
+        ]).toArray();
+
+        if (result.length > 0) {
           res.json(result);
         } else {
           res.status(404).json({ error: "Form not found" });
@@ -3411,6 +3455,7 @@ async function run() {
         res.status(500).json({ error: "Internal Server Error" });
       }
     });
+
 
     app.patch(
       "/forms/:id",
@@ -3459,18 +3504,50 @@ async function run() {
     });
 
     // Forms
+    // app.get("/pdf-forms/:adminEmail", verifyJWT, async (req, res) => {
+    //   try {
+    //     const adminEmail = req.params.adminEmail;
+
+    //     const cursor = formLibrary.find({ adminEmail: adminEmail });
+    //     const result = await cursor.toArray();
+    //     res.send(result);
+    //   } catch (err) {
+    //     console.error(err);
+    //     res.status(500).json({ error: "Something went wrong" });
+    //   }
+    // });
+
     app.get("/pdf-forms/:adminEmail", verifyJWT, async (req, res) => {
       try {
         const adminEmail = req.params.adminEmail;
 
-        const cursor = formLibrary.find({ adminEmail: adminEmail });
-        const result = await cursor.toArray();
-        res.send(result);
+
+        const result = await formLibrary.aggregate([
+          { $match: { adminEmail: adminEmail } },
+          {
+            $addFields: {
+              teamId: { $toObjectId: "$teamId" },
+            },
+          },
+          {
+            $lookup: {
+              from: "teams",
+              localField: "teamId",
+              foreignField: "_id",
+              as: "teamInfo",
+            },
+          },
+        ]).toArray();
+
+        console.log({ result })
+
+        res.send(result); // Send the result to the client
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching PDF forms with teams:", err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
+
 
     // Filed Forms
     app.get("/filled-forms/:userEmail", verifyJWT, async (req, res) => {
