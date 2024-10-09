@@ -66,7 +66,7 @@ io.on("connection", (socket) => {
 });
 
 app.get("/", (req, res) => {
-  res.send("AMS Server is running.");
+  res.json("AMS Server is running.");
 });
 // 2 Year
 // bp8hmRR2
@@ -191,6 +191,8 @@ app.post(
                 amount_paid: amount_total,
                 customer_id: customer_id || "",
                 isSubscribed: true,
+                planName: metadata.productName,
+                teamLimit: metadata.teams,
               },
             }
           );
@@ -273,8 +275,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-        ? 20
-        : 0;
+      ? 20
+      : 0;
 
   let coupon;
 
@@ -304,7 +306,7 @@ app.post("/create-checkout-session", async (req, res) => {
       ],
       mode: "subscription",
       customer_email: metadata.email,
-      allow_promotion_codes: true,
+
       success_url: "https://overtimeam.com/dashboard",
       cancel_url: "https://overtimeam.com/payment",
       metadata: metadata || {},
@@ -315,6 +317,8 @@ app.post("/create-checkout-session", async (req, res) => {
       metadata.productName === "2 Year"
     ) {
       sessionConfig.discounts = [{ coupon: coupon.id }];
+    } else {
+      sessionConfig.allow_promotion_codes = true;
     }
 
     if (metadata.customer_id) {
@@ -765,7 +769,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) { }
+          } catch (error) {}
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           console.log("req is in 2nd condition: seller is in refresh url");
 
@@ -1489,7 +1493,7 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
@@ -1825,11 +1829,9 @@ async function run() {
     //   try {
     //     const id = req.params.id;
 
-
     //     if (!ObjectId.isValid(id)) {
     //       return res.status(400).send({ error: "Invalid team ID format." });
     //     }
-
 
     //     const team = await teams.findOne({ _id: new ObjectId(id) });
 
@@ -2538,7 +2540,6 @@ async function run() {
       }
     });
 
-
     app.post("/plans", verifyJWT, verifyCoach, async (req, res) => {
       try {
         const planData = req.body;
@@ -2612,7 +2613,6 @@ async function run() {
       }
     });
 
-
     app.put("/task/:taskId", verifyJWT, async (req, res) => {
       try {
         const taskId = req.params.taskId;
@@ -2625,13 +2625,14 @@ async function run() {
           { $set: updateFields }
         );
 
-
-
         if (result.matchedCount === 0) {
           return res.status(404).json({ error: "Task not found." });
         }
 
-        res.json({ message: "Task updated successfully.", modifiedCount: result.modifiedCount });
+        res.json({
+          message: "Task updated successfully.",
+          modifiedCount: result.modifiedCount,
+        });
       } catch (error) {
         console.error("Error updating plan:", error);
         res
@@ -3424,26 +3425,27 @@ async function run() {
           query = {};
         }
 
-
-        const result = await formLibrary.aggregate([
-          { $match: query },
-          {
-            $addFields: {
-              teamId: { $toObjectId: "$teamId" },
+        const result = await formLibrary
+          .aggregate([
+            { $match: query },
+            {
+              $addFields: {
+                teamId: { $toObjectId: "$teamId" },
+              },
             },
-          },
-          {
-            $lookup: {
-              from: "teams",
-              localField: "teamId",
-              foreignField: "_id",
-              as: "teamInfo",
+            {
+              $lookup: {
+                from: "teams",
+                localField: "teamId",
+                foreignField: "_id",
+                as: "teamInfo",
+              },
             },
-          },
-          {
-            $unwind: { path: "$teamInfo", preserveNullAndEmptyArrays: true },
-          },
-        ]).toArray();
+            {
+              $unwind: { path: "$teamInfo", preserveNullAndEmptyArrays: true },
+            },
+          ])
+          .toArray();
 
         if (result.length > 0) {
           res.json(result);
@@ -3455,7 +3457,6 @@ async function run() {
         res.status(500).json({ error: "Internal Server Error" });
       }
     });
-
 
     app.patch(
       "/forms/:id",
@@ -3521,25 +3522,26 @@ async function run() {
       try {
         const adminEmail = req.params.adminEmail;
 
-
-        const result = await formLibrary.aggregate([
-          { $match: { adminEmail: adminEmail } },
-          {
-            $addFields: {
-              teamId: { $toObjectId: "$teamId" },
+        const result = await formLibrary
+          .aggregate([
+            { $match: { adminEmail: adminEmail } },
+            {
+              $addFields: {
+                teamId: { $toObjectId: "$teamId" },
+              },
             },
-          },
-          {
-            $lookup: {
-              from: "teams",
-              localField: "teamId",
-              foreignField: "_id",
-              as: "teamInfo",
+            {
+              $lookup: {
+                from: "teams",
+                localField: "teamId",
+                foreignField: "_id",
+                as: "teamInfo",
+              },
             },
-          },
-        ]).toArray();
+          ])
+          .toArray();
 
-        console.log({ result })
+        console.log({ result });
 
         res.send(result); // Send the result to the client
       } catch (err) {
@@ -3547,7 +3549,6 @@ async function run() {
         res.status(500).json({ error: "Something went wrong" });
       }
     });
-
 
     // Filed Forms
     app.get("/filled-forms/:userEmail", verifyJWT, async (req, res) => {
