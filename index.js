@@ -17,6 +17,7 @@ const stripe = require("stripe")(
 const crypto = require("crypto");
 
 const cron = require("node-cron");
+const logger = require("./logger");
 
 const upload = multer({ storage });
 
@@ -46,7 +47,7 @@ app.use(cors(corsOptionsDelegate));
 const port = process.env.PORT || 5003;
 
 const server = app.listen(port, () => {
-  console.log(`AMS Server listening on port ${port}`);
+  `AMS Server listening on port ${port}`;
 });
 
 const io = new Server(server, {
@@ -57,10 +58,10 @@ const io = new Server(server, {
 });
 
 io.on("connection", (socket) => {
-  console.log(`User connected ${socket.id}`);
+  `User connected ${socket.id}`;
 
   socket.on("chatMessage", (message) => {
-    console.log(`Received chat message: ${message}`);
+    `Received chat message: ${message}`;
     io.emit("chatMessage", message);
   });
 });
@@ -84,7 +85,7 @@ const client = new MongoClient(uri, {
   },
 });
 
-client.connect().catch((err) => console.log(err));
+client.connect().catch((err) => err);
 
 const database = client.db("overtimeDB");
 const users = database.collection("users");
@@ -114,7 +115,7 @@ app.post(
   express.raw({ type: "application/json" }),
   async (request, response) => {
     const sig = request.headers["stripe-signature"];
-    console.log("sig", sig);
+    "sig", sig;
     let event;
 
     //NOTE: Must change signature for production
@@ -130,23 +131,23 @@ app.post(
       return;
     }
 
-    console.log("event.type", event.type);
+    "event.type", event.type;
 
     switch (event.type) {
       case "checkout.session.completed":
         const checkoutSessionCompleted = event.data.object;
 
-        console.log(checkoutSessionCompleted);
+        checkoutSessionCompleted;
 
         // const paymentIntent = await stripe.paymentIntents.retrieve(
         //   checkoutSessionCompleted.payment_intent
         // );
 
-        // console.log({ paymentIntent });
+        // ({ paymentIntent });
 
         // const metadata = JSON.parse(checkoutSessionCompleted.metadata);
 
-        console.log("metadata: ", checkoutSessionCompleted.metadata);
+        "metadata: ", checkoutSessionCompleted.metadata;
 
         const metadata = checkoutSessionCompleted.metadata;
 
@@ -175,9 +176,9 @@ app.post(
                 ],
               }
             );
-            console.log(res);
+            res;
           } catch (error) {
-            console.log(error);
+            error;
           }
         }
 
@@ -193,17 +194,16 @@ app.post(
                 isSubscribed: true,
                 planName: metadata.productName,
                 teamLimit: metadata.teams,
+                planStartTime: new Date(),
               },
             }
           );
-
-          console.log({ checkoutSessionCompleted, result });
         }
 
         break;
 
       // case "customer.subscription.created": {
-      //   console.log(event.type.data.object.status);
+      //   (event.type.data.object.status);
       //   if (subscription.status === "active") {
       //     const checkoutSessionCompleted = event.data.object;
 
@@ -211,7 +211,7 @@ app.post(
       //       checkoutSessionCompleted.payment_intent
       //     );
 
-      //     console.log({ paymentIntent });
+      //     ({ paymentIntent });
 
       //     const userEmaill = checkoutSessionCompleted.customer_email;
       //     const customer_id = checkoutSessionCompleted.customer;
@@ -230,36 +230,36 @@ app.post(
       //       }
       //     );
 
-      //     console.log({ checkoutSessionCompleted, result });
+      //     ({ checkoutSessionCompleted, result });
       //   }
       //   break;
       // }
       // case "invoice.payment_succeeded":
       //   const invoicePaymentSucceeded = event.data.object;
 
-      //   console.log({ invoicePaymentSucceeded });
+      //   ({ invoicePaymentSucceeded });
 
       //   break;
 
       // case "invoice.payment_failed":
       //   const invoicePaymentFailed = event.data.object;
 
-      //   console.log({ invoicePaymentFailed });
+      //   ({ invoicePaymentFailed });
 
       //   break;
 
       // case "customer.subscription.deleted":
       //   const subscriptionDeleted = event.data.object;
-      //   console.log({ subscriptionDeleted });
+      //   ({ subscriptionDeleted });
 
       // case "payment_intent.succeeded":
       //   const paymentIntentSucceeded = event.data.object;
-      //   console.log({ paymentIntentSucceeded });
+      //   ({ paymentIntentSucceeded });
 
       //   break;
 
       default:
-        console.log(`Unhandled event type ${event.type}`);
+        `Unhandled event type ${event.type}`;
     }
 
     response.send();
@@ -332,7 +332,7 @@ app.post("/create-checkout-session", async (req, res) => {
 
     res.json({ url: session.url });
   } catch (error) {
-    console.error("Error creating checkout session:", error);
+    logger.error("Error creating checkout session:", error);
     res.status(500).send("Internal Server Error");
   }
 });
@@ -402,7 +402,7 @@ async function run() {
           ],
         });
 
-        console.log({ product });
+        ({ product });
 
         const priceObject = await stripe.prices.create({
           product: product.id,
@@ -411,7 +411,7 @@ async function run() {
         });
         return priceObject;
       } catch (error) {
-        console.error("Error creating product in Stripe:", error);
+        logger.error("Error creating product in Stripe:", error);
         throw error;
       }
     };
@@ -436,7 +436,7 @@ async function run() {
 
         res.status(201).json(result);
       } catch (error) {
-        console.error("Error creating product:", error);
+        logger.error("Error creating product:", error);
         res.status(500).send("Internal Server Error");
       }
     });
@@ -450,7 +450,7 @@ async function run() {
         });
         res.json(fee);
       } catch (error) {
-        console.error("Error fetching prices:", error);
+        logger.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
       }
     });
@@ -462,7 +462,7 @@ async function run() {
 
         res.json(pricesData);
       } catch (error) {
-        console.error("Error fetching prices:", error);
+        logger.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
       }
     });
@@ -543,13 +543,13 @@ async function run() {
             const checkoutUrl = session.url;
             return { checkoutUrl, athleteEmail, paid: false };
           } catch (error) {
-            console.log(error);
+            error;
             return null;
           }
         });
 
         const sessions = (await Promise.all(sessionPromises)).filter(Boolean);
-        console.log("sessions", sessions);
+        "sessions", sessions;
 
         const products = {
           productId: priceId,
@@ -558,7 +558,7 @@ async function run() {
           sessions: sessions,
         };
 
-        console.log("products : ", products);
+        "products : ", products;
 
         // Batch database operations
         await Promise.all([
@@ -597,12 +597,12 @@ async function run() {
   OverTime Athletic Management
 </p> `;
 
-          sendMail(athleteEmail, subject, mailText).catch(console.error);
+          sendMail(athleteEmail, subject, mailText).catch(logger.error);
         });
 
         res.status(200).json({ message: "Price assigned successfully" });
       } catch (error) {
-        console.error("Error fetching prices:", error);
+        logger.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
       }
     });
@@ -610,7 +610,7 @@ async function run() {
     app.post("/stripe/connect/:adminId", async (req, res) => {
       try {
         const { adminId } = req.params;
-        console.log("admin id", adminId);
+        "admin id", adminId;
         let account;
         let accountLink;
 
@@ -618,28 +618,28 @@ async function run() {
           adminId: adminId,
         });
 
-        console.log(existingAccount);
+        existingAccount;
 
-        console.log("req query", req.query);
+        "req query", req.query;
 
         if (
           req.query.onBoarding === "true" &&
           req.query.accountId !== undefined &&
           existingAccount
         ) {
-          console.log("req is in 1st condition: seller is in return url");
+          ("req is in 1st condition: seller is in return url");
           // const accountId = req?.query?.accountId;
           const accountId = existingAccount.accountId;
           try {
-            console.log("I am on try block");
+            ("I am on try block");
             const accountDetails = await stripe.accounts.retrieve(
               `${accountId}`
             );
 
-            console.log("charges enabled", accountDetails.charges_enabled);
+            "charges enabled", accountDetails.charges_enabled;
 
             if (accountDetails.charges_enabled === true) {
-              console.log("charges enabled", accountDetails.charges_enabled);
+              "charges enabled", accountDetails.charges_enabled;
               await stripeAccount.updateOne(
                 { _id: existingAccount._id },
                 {
@@ -657,15 +657,15 @@ async function run() {
                 message: "stripe connected ",
               });
             } else {
-              console.log("again checking for charge enable ...........");
+              ("again checking for charge enable ...........");
               const accountDetails = await stripe.accounts.retrieve(
                 `${accountId}`
               );
 
-              console.log("charges enabled", accountDetails.charges_enabled);
+              "charges enabled", accountDetails.charges_enabled;
 
               if (accountDetails.charges_enabled !== true) {
-                console.log("creating link again... no charge enables");
+                ("creating link again... no charge enables");
 
                 accountLink = await stripe.accountLinks.create({
                   account: existingAccount.accountId,
@@ -700,10 +700,10 @@ async function run() {
               }
             }
           } catch (err) {
-            console.log("err in first condition", err.message);
+            "err in first condition", err.message;
           }
         } else if (existingAccount) {
-          console.log("Existing account section");
+          ("Existing account section");
           const accountId = existingAccount.accountId;
 
           try {
@@ -711,7 +711,7 @@ async function run() {
               `${accountId}`
             );
             if (accountDetails.charges_enabled === true) {
-              console.log("charges enabled", accountDetails.charges_enabled);
+              "charges enabled", accountDetails.charges_enabled;
               await stripeAccount.updateOne(
                 { _id: existingAccount._id },
                 {
@@ -729,15 +729,15 @@ async function run() {
                 message: "stripe connected ",
               });
             } else {
-              console.log("again checking for charge enable ...........");
+              ("again checking for charge enable ...........");
               const accountDetails = await stripe.accounts.retrieve(
                 `${accountId}`
               );
 
-              console.log("charges enabled", accountDetails.charges_enabled);
+              "charges enabled", accountDetails.charges_enabled;
 
               if (accountDetails.charges_enabled !== true) {
-                console.log("creating link again... no charge enables");
+                ("creating link again... no charge enables");
 
                 accountLink = await stripe.accountLinks.create({
                   account: existingAccount.accountId,
@@ -771,7 +771,7 @@ async function run() {
             }
           } catch (error) {}
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
-          console.log("req is in 2nd condition: seller is in refresh url");
+          ("req is in 2nd condition: seller is in refresh url");
 
           try {
             accountLink = await stripe.accountLinks.create({
@@ -784,12 +784,12 @@ async function run() {
               type: "account_onboarding",
             });
           } catch (err) {
-            console.log(err.message);
+            err.message;
           }
         } else {
-          console.log("account initiated: seller is in first stage");
+          ("account initiated: seller is in first stage");
 
-          // console.log(req)
+          // (req)
 
           account = await stripe.accounts.create({
             type: "express",
@@ -805,7 +805,7 @@ async function run() {
             type: "account_onboarding",
           });
 
-          console.log("account link", accountLink.url);
+          "account link", accountLink.url;
 
           await stripeAccount.updateOne(
             { _id: new ObjectId(oid()) },
@@ -821,11 +821,11 @@ async function run() {
           );
         }
 
-        // console.log("account", account);
+        // ("account", account);
 
         res.json(accountLink.url);
       } catch (error) {
-        console.error("Error fetching prices:", error);
+        logger.error("Error fetching prices:", error);
         res.status(500).send("Internal Server Error");
       }
     });
@@ -862,7 +862,7 @@ async function run() {
 
         return res.json(account);
       } catch (error) {
-        console.log(error);
+        error;
       }
     });
 
@@ -871,7 +871,7 @@ async function run() {
       try {
         const adminEmail = req.params.adminEmail;
 
-        console.log(adminEmail);
+        adminEmail;
         const coaches = await users
           .find({
             role: { $in: ["coach", "sub_coach"] },
@@ -881,7 +881,7 @@ async function run() {
 
         res.json(coaches);
       } catch (error) {
-        console.error("Error fetching coach or sub_coach users:", error);
+        logger.error("Error fetching coach or sub_coach users:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching users." });
@@ -898,8 +898,6 @@ async function run() {
           const body = req.body;
 
           const bodyData = { ...body };
-
-          console.log({ bodyData });
 
           const invited = await invitedUsers.insertOne(bodyData);
 
@@ -941,9 +939,9 @@ async function run() {
 
           try {
             const resMail = await sendMail(recipientEmail, subject, mailText);
-            console.log("Mail sent successfully", resMail);
+            "Mail sent successfully", resMail;
           } catch (mailError) {
-            console.error("Error sending mail", mailError);
+            logger.error("Error sending mail", mailError);
             return res.status(500).send({
               error: "An error occurred while sending the invitation email.",
             });
@@ -951,7 +949,7 @@ async function run() {
 
           res.status(200).send(token);
         } catch (error) {
-          console.log(error);
+          error;
           res
             .status(500)
             .send({ error: "An error occurred while creating invitations." });
@@ -962,11 +960,11 @@ async function run() {
     app.get("/invitedUsers/:token", async (req, res) => {
       try {
         const id = req.params.token;
-        console.log({ id });
+        ({ id });
         const result = await invitedUsers.findOne({ _id: new ObjectId(id) });
         res.status(200).send(result);
       } catch (error) {
-        console.error("Error fetching invited users:", error);
+        logger.error("Error fetching invited users:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching invited users." });
@@ -975,7 +973,7 @@ async function run() {
 
     app.post("/jwt", (req, res) => {
       const user = req.body;
-      console.log("useruseruser", req.body);
+      "useruseruser", req.body;
       const token = jwt.sign(user, process.env.JWT_SECRET_KEY, {
         expiresIn: "1h",
       });
@@ -989,7 +987,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        console.error("Error fetching users:", error);
+        logger.error("Error fetching users:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching users." });
@@ -1001,7 +999,7 @@ async function run() {
         const result = await users.findOne({ email: req.params.email });
         res.send(result);
       } catch (error) {
-        console.error("Error fetching user:", error);
+        logger.error("Error fetching user:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching user." });
@@ -1012,7 +1010,7 @@ async function run() {
         const result = await users.findOne({ email: req.params.email });
         res.send(result);
       } catch (error) {
-        console.error("Error fetching user:", error);
+        logger.error("Error fetching user:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching user." });
@@ -1026,7 +1024,7 @@ async function run() {
         });
         res.send(result);
       } catch (error) {
-        console.error("Error fetching user:", error);
+        logger.error("Error fetching user:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching user." });
@@ -1093,7 +1091,7 @@ async function run() {
 
           res.send(result);
         } catch (error) {
-          console.error("Error fetching users:", error);
+          logger.error("Error fetching users:", error);
           res
             .status(500)
             .send({ error: "An error occurred while fetching users." });
@@ -1111,7 +1109,12 @@ async function run() {
           const adminEmail = req.params.adminEmail;
           const role = req.query.role;
 
-          console.log(role);
+          `Role`,
+            {
+              meta: {
+                role,
+              },
+            };
 
           const cursor = users.find({
             role: { $in: ["athlete", "parents"] },
@@ -1121,7 +1124,7 @@ async function run() {
 
           res.send(result);
         } catch (error) {
-          console.error("Error fetching users:", error);
+          logger.error("Error fetching users:", error);
           res
             .status(500)
             .send({ error: "An error occurred while fetching users." });
@@ -1142,7 +1145,7 @@ async function run() {
 
         res.send(result);
       } catch (error) {
-        console.error("Error fetching users:", error);
+        logger.error("Error fetching users:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching users." });
@@ -1210,7 +1213,7 @@ async function run() {
           res.send(result);
         }
       } catch (error) {
-        console.error("Error fetching users by role:", error);
+        logger.error("Error fetching users by role:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching users by role." });
@@ -1238,7 +1241,7 @@ async function run() {
     });
 
     app.get("/users/:userEmail", async (req, res) => {
-      console.log("userEmail", req.params.userEmail);
+      "userEmail", req.params.userEmail;
 
       const userEmail = req.params.userEmail;
 
@@ -1252,7 +1255,7 @@ async function run() {
       const user = req.body;
 
       const existingUser = await users.findOne({ email: user.email });
-      console.log({ existingUser });
+      ({ existingUser });
       if (existingUser) {
         return res
           .status(400)
@@ -1293,7 +1296,7 @@ async function run() {
       //   //   { returnDocument: "after" }
       //   // );
 
-      //   console.log({ roster, teams });
+      //   ({ roster, teams });
       // }
 
       if (user.regType === "Invited") {
@@ -1323,7 +1326,7 @@ async function run() {
         try {
           const athleteData = req.body.athleteData; // Rename to a more generic name
           const newTryoutStage = req.body.stage;
-          console.log({ newTryoutStage });
+          ({ newTryoutStage });
           const teamId = req.params.teamId;
 
           // Step 1: Retrieve the current list of athletes
@@ -1358,7 +1361,7 @@ async function run() {
             (athlete) => athlete.athleteEmail
           );
 
-          console.log({ deletedAthletesEmails });
+          ({ deletedAthletesEmails });
 
           const updateUser = await users.updateMany(
             {
@@ -1397,7 +1400,7 @@ async function run() {
             },
           ]);
 
-          console.log({ updatedAthletes });
+          ({ updatedAthletes });
 
           await Promise.all(
             updatedAthletes.map(async (athlete) => {
@@ -1421,9 +1424,9 @@ async function run() {
                   subject,
                   mailText
                 );
-                console.log("Mail sent successfully", resMail);
+                "Mail sent successfully", resMail;
               } catch (mailError) {
-                console.error("Error sending mail", mailError);
+                logger.error("Error sending mail", mailError);
                 return res.status(500).send({
                   message:
                     "An error occurred while sending the invitation email.",
@@ -1436,7 +1439,7 @@ async function run() {
             message: "Updated Successfully",
           });
         } catch (error) {
-          console.log(error);
+          error;
           res.status(500).json({
             message: error.message,
           });
@@ -1513,7 +1516,7 @@ async function run() {
           new Set([...existingTeamIds, ...teamIds])
         );
 
-        console.log({ newTeamIds });
+        ({ newTeamIds });
         // Convert teamIds from an array of strings to an array of ObjectIds
         const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
@@ -1539,7 +1542,7 @@ async function run() {
 
         res.send(result);
       } catch (error) {
-        console.error("Error assigning teams to coach:", error);
+        logger.error("Error assigning teams to coach:", error);
         res.status(500).send({
           error: "An error occurred while assigning teams to coach.",
         });
@@ -1569,7 +1572,7 @@ async function run() {
             new Set([...existingTeamIds, ...teamIds])
           );
 
-          console.log({ newTeamIds });
+          ({ newTeamIds });
           // Convert teamIds from an array of strings to an array of ObjectIds
           const teamObjectIds = teamIds.map((teamId) => new ObjectId(teamId));
 
@@ -1604,7 +1607,7 @@ async function run() {
 
           res.send(result);
         } catch (error) {
-          console.error("Error assigning teams to coach:", error);
+          logger.error("Error assigning teams to coach:", error);
           res.status(500).send({
             error: "An error occurred while assigning teams to coach.",
           });
@@ -1620,7 +1623,7 @@ async function run() {
       async (req, res) => {
         const athleteData = req.body.athleteData;
 
-        console.log({ athleteData });
+        ({ athleteData });
 
         try {
           // Array to store promises for updating teams and users
@@ -1679,7 +1682,7 @@ async function run() {
 
           res.send({ message: "Athletes assigned to teams successfully" });
         } catch (error) {
-          console.error("Error assigning athletes to teams:", error);
+          logger.error("Error assigning athletes to teams:", error);
           res.status(500).send({
             message: "An error occurred while assigning athletes to teams.",
             details: error.message,
@@ -1707,7 +1710,7 @@ async function run() {
           );
 
           await coachEmailStrings.map(async (coachEmail) => {
-            console.log({ teamId });
+            ({ teamId });
             const updatedCoach = await users.updateOne(
               {
                 email: coachEmail,
@@ -1719,12 +1722,12 @@ async function run() {
               }
             );
 
-            console.log(updatedCoach);
+            updatedCoach;
           });
 
           res.send(result);
         } catch (error) {
-          console.error("Error updating coaches for the team:", error);
+          logger.error("Error updating coaches for the team:", error);
           res.status(500).send({
             error: "An error occurred while updating coaches for the team.",
           });
@@ -1745,7 +1748,7 @@ async function run() {
     app.patch("/user/update/isverified", async (req, res) => {
       const email = req.body.email;
 
-      console.log({ email });
+      ({ email });
 
       const result = await users.updateOne(
         { email },
@@ -1804,7 +1807,7 @@ async function run() {
 
         res.send(result);
       } catch (error) {
-        console.error("Error fetching teams with coach data:", error);
+        logger.error("Error fetching teams with coach data:", error);
         res.status(500).send({
           error: "An error occurred while fetching teams with coach data.",
         });
@@ -1818,7 +1821,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        console.error("Error fetching teams:", error);
+        logger.error("Error fetching teams:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching teams." });
@@ -1841,7 +1844,7 @@ async function run() {
 
     //     res.send(team);
     //   } catch (error) {
-    //     console.error("Error fetching team:", error);
+    //     logger.error("Error fetching team:", error);
     //     res
     //       .status(500)
     //       .send({ error: "An error occurred while fetching the team." });
@@ -2014,7 +2017,7 @@ async function run() {
           message: "team updated",
         });
       } catch (error) {
-        console.log(error);
+        error;
         res
           .status(500)
 
@@ -2072,7 +2075,7 @@ async function run() {
             ])
             .toArray();
 
-          console.log({ rosters: result });
+          ({ rosters: result });
           res.send(result);
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
@@ -2129,7 +2132,7 @@ async function run() {
             ])
             .toArray();
 
-          console.log({ rosters: result });
+          ({ rosters: result });
           res.send(result);
         } catch (error) {
           res.status(500).send({ error: "An error has occurred" });
@@ -2154,7 +2157,7 @@ async function run() {
 
         res.json(updatedTeam);
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ message: "Internal Server Error" });
       }
     });
@@ -2183,7 +2186,7 @@ async function run() {
 
         res.json({ message: "Position updated successfully" });
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ message: "Internal Server Error" });
       }
     });
@@ -2214,7 +2217,7 @@ async function run() {
           );
           res.send(result);
         } catch (error) {
-          console.error(error.message);
+          logger.error(error.message);
           res.status(501).send("An error occurred!");
         }
       }
@@ -2262,7 +2265,7 @@ async function run() {
 
           res.send(result);
         } catch (error) {
-          console.error(error.message);
+          logger.error(error.message);
           res.status(501).send("An error occurred!");
         }
       }
@@ -2274,7 +2277,7 @@ async function run() {
         const result = await teams.deleteOne({ _id: new ObjectId(id) });
         res.send(result);
       } catch (error) {
-        console.error(error.message);
+        logger.error(error.message);
         res.status(500).send("An error has occurred!");
       }
     });
@@ -2331,7 +2334,7 @@ async function run() {
 
         res.json(result);
       } catch (error) {
-        console.error("Error fetching events:", error);
+        logger.error("Error fetching events:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching events." });
@@ -2389,7 +2392,7 @@ async function run() {
 
         res.json(result);
       } catch (error) {
-        console.error("Error fetching events:", error);
+        logger.error("Error fetching events:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching events." });
@@ -2407,7 +2410,7 @@ async function run() {
           eventId: result.insertedId,
         });
       } catch (error) {
-        console.error("Error creating event:", error);
+        logger.error("Error creating event:", error);
         res
           .status(500)
           .json({ error: "An error occurred while creating the event." });
@@ -2430,7 +2433,7 @@ async function run() {
           eventId: result.modifiedCount,
         });
       } catch (error) {
-        console.error("Error updating event:", error);
+        logger.error("Error updating event:", error);
         res
           .status(500)
           .json({ error: "An error occurred while updating the event." });
@@ -2529,11 +2532,11 @@ async function run() {
           ])
           .toArray();
 
-        // console.log({ result })
+        // ({ result })
 
         res.json(result);
       } catch (error) {
-        console.error("Error fetching plans:", error);
+        logger.error("Error fetching plans:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching plans." });
@@ -2549,7 +2552,7 @@ async function run() {
           planId: result.insertedId,
         });
       } catch (error) {
-        console.error("Error creating plan:", error);
+        logger.error("Error creating plan:", error);
         res
           .status(500)
           .json({ error: "An error occurred while creating the plan." });
@@ -2572,7 +2575,7 @@ async function run() {
           eventId: result.modifiedCount,
         });
       } catch (error) {
-        console.error("Error updating plan:", error);
+        logger.error("Error updating plan:", error);
         res
           .status(500)
           .json({ error: "An error occurred while updating the plan." });
@@ -2606,7 +2609,7 @@ async function run() {
           planId: result.insertedId,
         });
       } catch (error) {
-        console.error("Error adding task:", error);
+        logger.error("Error adding task:", error);
         res
           .status(500)
           .json({ error: "An error occurred while adding task to the plan." });
@@ -2634,7 +2637,7 @@ async function run() {
           modifiedCount: result.modifiedCount,
         });
       } catch (error) {
-        console.error("Error updating plan:", error);
+        logger.error("Error updating plan:", error);
         res
           .status(500)
           .json({ error: "An error occurred while updating the plan." });
@@ -2651,7 +2654,7 @@ async function run() {
           .toArray();
         res.json(result);
       } catch (error) {
-        console.error("Error fetching trips:", error);
+        logger.error("Error fetching trips:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching trips." });
@@ -2667,7 +2670,7 @@ async function run() {
           tripId: result.insertedId,
         });
       } catch (error) {
-        console.error("Error creating trip:", error);
+        logger.error("Error creating trip:", error);
         res
           .status(500)
           .json({ error: "An error occurred while creating the trip." });
@@ -2690,7 +2693,7 @@ async function run() {
           eventId: result.modifiedCount,
         });
       } catch (error) {
-        console.error("Error updating trip:", error);
+        logger.error("Error updating trip:", error);
         res
           .status(500)
           .json({ error: "An error occurred while updating the trip." });
@@ -2780,7 +2783,7 @@ async function run() {
 
           res.send(result);
         } catch (error) {
-          console.error("Error fetching inventory:", error);
+          logger.error("Error fetching inventory:", error);
           res
             .status(500)
             .send({ error: "An error occurred while fetching teams." });
@@ -2837,7 +2840,7 @@ async function run() {
 
           res.send(result);
         } catch (error) {
-          console.error("Error fetching teams:", error);
+          logger.error("Error fetching teams:", error);
           res
             .status(500)
             .send({ error: "An error occurred while fetching teams." });
@@ -2856,11 +2859,11 @@ async function run() {
           })
           .toArray();
 
-        console.log("athl", result);
+        "athl", result;
 
         res.status(200).send(result);
       } catch (error) {
-        console.error("Error fetching teams:", error);
+        logger.error("Error fetching teams:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching teams." });
@@ -2877,7 +2880,7 @@ async function run() {
 
         res.status(200).send(result);
       } catch (error) {
-        console.error("Error deleting inventory:", error);
+        logger.error("Error deleting inventory:", error);
         res.status(500).json("An error occurred while deleting inventory.");
       }
     });
@@ -2939,9 +2942,9 @@ async function run() {
       verifyAdminOrCoach,
       async (req, res) => {
         const { id } = req.params;
-        console.log({ id });
+        ({ id });
         const selectedTeam = req.body;
-        console.log({ selectedTeam });
+        ({ selectedTeam });
 
         try {
           const existingInventory = await inventory.findOne({
@@ -2975,9 +2978,9 @@ async function run() {
       verifyAdminOrCoach,
       async (req, res) => {
         const { id } = req.params;
-        console.log({ id });
+        ({ id });
         const selectedAthletes = req.body;
-        console.log({ selectedAthletes });
+        ({ selectedAthletes });
 
         try {
           const existingInventory = await inventory.findOne({
@@ -3019,7 +3022,7 @@ async function run() {
 
           res.status(200).send(result);
         } catch (error) {
-          console.error("Error updating Inventory:", error);
+          logger.error("Error updating Inventory:", error);
           res.status(500).send({ message: "Error updating Inventory", error });
         }
       }
@@ -3027,9 +3030,9 @@ async function run() {
 
     app.patch("/inventory/removeAthlete/:id", verifyJWT, async (req, res) => {
       const { id } = req.params;
-      console.log({ id });
+      ({ id });
       const athleteEmail = req.body;
-      console.log({ athleteEmail });
+      ({ athleteEmail });
 
       try {
         const existingInventory = await inventory.findOne({
@@ -3065,7 +3068,7 @@ async function run() {
 
         res.status(200).send(result);
       } catch (error) {
-        console.error("Error updating Inventory:", error);
+        logger.error("Error updating Inventory:", error);
         res.status(500).send({ message: "Error updating Inventory", error });
       }
     });
@@ -3076,12 +3079,12 @@ async function run() {
       verifyAdminOrCoach,
       async (req, res) => {
         const { id } = req.params;
-        console.log({ id });
+        ({ id });
         const { teamId } = req.body;
-        console.log(req.body);
+        req.body;
 
         try {
-          console.log(teamId);
+          teamId;
           if (!teamId) {
             return res.status(500).json({ message: "No teamId found!" });
           }
@@ -3104,7 +3107,7 @@ async function run() {
 
           res.status(200).send(result);
         } catch (error) {
-          console.error("Error updating Inventory:", error);
+          logger.error("Error updating Inventory:", error);
           res.status(500).send({ message: "Error updating Inventory", error });
         }
       }
@@ -3197,7 +3200,7 @@ async function run() {
 
         res.json(result);
       } catch (error) {
-        console.error("Error fetching reservations:", error);
+        logger.error("Error fetching reservations:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching reservations." });
@@ -3212,7 +3215,7 @@ async function run() {
 
         res.status(200).send(result);
       } catch (error) {
-        console.error("Error fetching reservations:", error);
+        logger.error("Error fetching reservations:", error);
         res.status(500).json("An error occurred while deleting reservations.");
       }
     });
@@ -3228,7 +3231,7 @@ async function run() {
           .toArray();
         res.json(result);
       } catch (error) {
-        console.error("Error fetching notifications:", error);
+        logger.error("Error fetching notifications:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching notification." });
@@ -3246,7 +3249,7 @@ async function run() {
           notificationId: result.insertedId,
         });
       } catch (error) {
-        console.error("Error creating notification:", error);
+        logger.error("Error creating notification:", error);
         res.status(500).json({
           error: "An error occurred while creating the notification.",
         });
@@ -3265,7 +3268,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (error) {
-        console.error("Error fetching users:", error);
+        logger.error("Error fetching users:", error);
         res
           .status(500)
           .send({ error: "An error occurred while fetching users." });
@@ -3320,7 +3323,7 @@ async function run() {
           res.send(response); // Sending newly inserted document
         }
       } catch (error) {
-        console.error("Error:", error);
+        logger.error("Error:", error);
         res.status(500).send("Server Error");
       }
     });
@@ -3332,7 +3335,7 @@ async function run() {
         const result = await performances.findOne({ userEmail });
         res.json(result);
       } catch (error) {
-        console.error("Error fetching performances:", error);
+        logger.error("Error fetching performances:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching performance." });
@@ -3356,7 +3359,7 @@ async function run() {
 
           res.send(updatedAllergies.value);
         } catch (error) {
-          console.error("Error:", error);
+          logger.error("Error:", error);
           res.status(500).send("Server Error");
         }
       }
@@ -3380,7 +3383,7 @@ async function run() {
 
           res.send(updatedPastInjuries.value);
         } catch (error) {
-          console.error("Error:", error);
+          logger.error("Error:", error);
           res.status(500).send("Server Error");
         }
       }
@@ -3393,7 +3396,7 @@ async function run() {
         const result = await medicalInformations.findOne({ userEmail });
         res.json(result);
       } catch (error) {
-        console.error("Error fetching medical info:", error);
+        logger.error("Error fetching medical info:", error);
         res
           .status(500)
           .json({ error: "An error occurred while fetching medical info." });
@@ -3453,7 +3456,7 @@ async function run() {
           res.status(404).json({ error: "Form not found" });
         }
       } catch (error) {
-        console.error("Error:", error);
+        logger.error("Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
     });
@@ -3478,7 +3481,7 @@ async function run() {
             res.status(404).json({ error: "Form not found" });
           }
         } catch (error) {
-          console.error("Error:", error);
+          logger.error("Error:", error);
           res.status(500).json({ error: "Internal Server Error" });
         }
       }
@@ -3490,7 +3493,7 @@ async function run() {
         const result = await formLibrary.deleteOne({ _id: new ObjectId(id) });
         res.send(result);
       } catch (error) {
-        console.error(error.message);
+        logger.error(error.message);
         res.status(500).send("An error has occurred!");
       }
     });
@@ -3513,7 +3516,7 @@ async function run() {
     //     const result = await cursor.toArray();
     //     res.send(result);
     //   } catch (err) {
-    //     console.error(err);
+    //     logger.error(err);
     //     res.status(500).json({ error: "Something went wrong" });
     //   }
     // });
@@ -3541,11 +3544,11 @@ async function run() {
           ])
           .toArray();
 
-        console.log({ result });
+        ({ result });
 
         res.send(result); // Send the result to the client
       } catch (err) {
-        console.error("Error fetching PDF forms with teams:", err);
+        logger.error("Error fetching PDF forms with teams:", err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
@@ -3563,7 +3566,7 @@ async function run() {
           findBy = { adminEmail: userEmail };
         }
 
-        console.log(findBy);
+        findBy;
 
         // Find filled forms
         const cursor = filledForms.find(findBy);
@@ -3592,7 +3595,7 @@ async function run() {
 
         res.send({ pdf: filled, custom: filledCustom });
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
@@ -3602,7 +3605,7 @@ async function run() {
       verifyJWT,
       upload.single("formFile"),
       async (req, res) => {
-        console.log("Bari khay");
+        ("Bari khay");
         try {
           if (!req?.file?.path) {
             return res.status(400).json({ error: "No file uploaded" });
@@ -3613,10 +3616,10 @@ async function run() {
           );
 
           const formUrl = cloudinaryResult.secure_url;
-          console.log(formUrl);
+          formUrl;
           res.send({ formUrl });
         } catch (err) {
-          console.error(err);
+          logger.error(err);
           res.status(500).json({ error: "Something went wrong" });
         }
       }
@@ -3644,7 +3647,7 @@ async function run() {
           const result = await formLibrary.insertOne(bodyData);
           res.send(result);
         } catch (err) {
-          console.error(err);
+          logger.error(err);
           res.status(500).json({ error: "Something went wrong" });
         }
       }
@@ -3681,7 +3684,7 @@ async function run() {
           );
           res.send(result);
         } catch (err) {
-          console.error(err);
+          logger.error(err);
           res.status(500).json({ error: "Something went wrong" });
         }
       }
@@ -3696,7 +3699,7 @@ async function run() {
         const result = await cursor.toArray();
         res.send(result);
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
@@ -3708,7 +3711,7 @@ async function run() {
         const result = await customForms.insertOne(formData);
         res.send(result);
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
@@ -3717,11 +3720,11 @@ async function run() {
       try {
         const formData = req.body;
 
-        console.log(formData);
+        formData;
         const result = await filledCustomForms.insertOne(formData);
         res.send(result);
       } catch (err) {
-        console.error(err);
+        logger.error(err);
         res.status(500).json({ error: "Something went wrong" });
       }
     });
@@ -3742,7 +3745,7 @@ async function run() {
           res.status(404).json({ error: "Form not found" });
         }
       } catch (error) {
-        console.error("Error:", error);
+        logger.error("Error:", error);
         res.status(500).json({ error: "Internal Server Error" });
       }
     });
@@ -3753,16 +3756,16 @@ async function run() {
         const result = await customForms.deleteOne({ _id: new ObjectId(id) });
         res.send(result);
       } catch (error) {
-        console.error(error.message);
+        logger.error(error.message);
         res.status(500).send("An error has occurred!");
       }
     });
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    console.log("Successfully connected to MongoDB!");
+    ("Successfully connected to MongoDB!");
   } catch (error) {
-    console.log("Error in server", error);
+    "Error in server", error;
   } finally {
     // Ensures that the client will close when you finish/error
     // await client.close();
@@ -3773,7 +3776,7 @@ run().catch(console.dir);
 //NOTE:cron
 cron.schedule("0 12 * * *", async () => {
   try {
-    console.log("Running the cron job for archiving team data.");
+    ("Running the cron job for archiving team data.");
     const currentDate = new Date();
     currentDate.setUTCHours(0, 0, 0, 0);
 
@@ -3791,15 +3794,15 @@ cron.schedule("0 12 * * *", async () => {
       })
       .toArray();
 
-    // console.log({ teamRosterToArchive });
+    // ({ teamRosterToArchive });
 
     for (roster of teamRosterToArchive) {
       //extract team athletes
       const team = await teams.findOne({ _id: roster.teamId });
       const prevAthletes = team.athletes;
 
-      // console.log({ team });
-      // console.log({ prevAthletes });
+      // ({ team });
+      // ({ prevAthletes });
 
       //update the existing roster as archived
 
@@ -3852,6 +3855,6 @@ cron.schedule("0 12 * * *", async () => {
       const insertedData = await teamRoster.insertOne(newRosterData);
     }
   } catch (error) {
-    console.log("error in cron", error);
+    "error in cron", error;
   }
 });
