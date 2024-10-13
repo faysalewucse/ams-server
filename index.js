@@ -47,7 +47,7 @@ app.use(cors(corsOptionsDelegate));
 const port = process.env.PORT || 5003;
 
 const server = app.listen(port, () => {
-  `AMS Server listening on port ${port}`;
+  logger.info(`AMS Server listening on port ${port}`);
 });
 
 const io = new Server(server, {
@@ -3763,7 +3763,11 @@ async function run() {
 
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
-    ("Successfully connected to MongoDB!");
+    logger.info(`Successfully connected to MongoDB!`, {
+      meta: {
+        port,
+      },
+    });
   } catch (error) {
     "Error in server", error;
   } finally {
