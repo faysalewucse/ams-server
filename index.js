@@ -1,4 +1,5 @@
 const express = require("express");
+require("dotenv").config();
 const cors = require("cors");
 const jwt = require("jsonwebtoken");
 const { verifyJWT } = require("./middleware/verifyJWT");
@@ -10,9 +11,11 @@ const sendMail = require("./sendMail");
 const { oid } = require("mongo-oid");
 const cloudinary = require("cloudinary").v2;
 const storage = multer.diskStorage({});
-const stripe = require("stripe")(
-  "sk_test_51OQ16rFd3jBtA0ChSF8R9j0LkJIGspNDvSlPFQlW6PvANqX08W6RuEsZ9NDq802aw2QIUsHnW0ZbVvMENdAD54CN00zbqNErkK"
-);
+
+// const stripe = require("stripe")(
+//   "sk_test_51OQ16rFd3jBtA0ChSF8R9j0LkJIGspNDvSlPFQlW6PvANqX08W6RuEsZ9NDq802aw2QIUsHnW0ZbVvMENdAD54CN00zbqNErkK"
+// );
+const stripe = require("stripe")(process.env.STRIPE_SECRET);
 
 const crypto = require("crypto");
 
@@ -20,8 +23,6 @@ const cron = require("node-cron");
 const logger = require("./logger");
 
 const upload = multer({ storage });
-
-require("dotenv").config();
 
 var allowlist = [
   "https://overtimeam.com",
@@ -48,7 +49,10 @@ const port = process.env.PORT || 5003;
 
 const server = app.listen(port, () => {
   logger.info(`AMS Server listening on port ${port}`);
+  
 });
+
+// console.log("secret", process.env.STRIPE_SECRET);
 
 const io = new Server(server, {
   cors: {
@@ -124,7 +128,7 @@ app.post(
         request.body,
         sig,
         // "whsec_e0957a7622d216ee38c42a2f42543b2f7b3d175dd6288d9069c13ea3f8752ff5"
-        "whsec_ezrXVONiAHziw4ND9IHRC5C0NflZFfsl"
+        process.env.STRIPE_WEBHOOK
       );
     } catch (err) {
       response.status(400).send(`Webhook Error: ${err.message}`);
