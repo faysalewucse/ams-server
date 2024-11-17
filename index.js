@@ -28,6 +28,8 @@ var allowlist = [
   "https://overtimeam.com",
   "overtimeam.com",
   "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
 ];
 const corsOptionsDelegate = function (req, callback) {
   let corsOptions = {
@@ -49,7 +51,7 @@ const port = process.env.PORT || 5003;
 
 const server = app.listen(port, () => {
   logger.info(`AMS Server listening on port ${port}`);
-  
+
 });
 
 // console.log("secret", process.env.STRIPE_SECRET);
@@ -61,14 +63,62 @@ const io = new Server(server, {
   },
 });
 
+
+
+
 io.on("connection", (socket) => {
-  `User connected ${socket.id}`;
+  console.log(`User connected ${socket.id}`);
 
   socket.on("chatMessage", (message) => {
-    `Received chat message: ${message}`;
+    console.log(`Received chat message: ${message}`);
     io.emit("chatMessage", message);
   });
+
+  let isRunning = false;
+  let intervalId = null;
+  let timerValue = 0;
+
+  socket.on("startTimer", ({ currentPeriod, periodTime, numberOfPeriods, periodLength, overtimeLength }) => {
+    if (!isRunning) {
+      isRunning = true;
+      timerValue = periodTime;
+
+      intervalId = setInterval(() => {
+        if (timerValue > 0) {
+          timerValue -= 1;
+          io.emit("timerUpdate", timerValue);
+        } else {
+          clearInterval(intervalId);
+          isRunning = false;
+
+          const nextPeriod = currentPeriod + 1;
+          const isTimeUp = nextPeriod > numberOfPeriods + (overtimeLength ? 1 : 0);
+
+          io.emit("periodUpdate", { period: nextPeriod, isTimeUp });
+
+          if (!isTimeUp) {
+            timerValue = nextPeriod <= numberOfPeriods ? periodLength * 60 : overtimeLength * 60;
+          }
+        }
+      }, 1000);
+    }
+  });
+
+  socket.on("stopTimer", () => {
+    if (isRunning) {
+      clearInterval(intervalId);
+      isRunning = false;
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log(`A user disconnected: ${socket.id}`);
+    clearInterval(intervalId);
+    isRunning = false;
+  });
 });
+
+
 
 app.get("/", (req, res) => {
   res.json("AMS Server is running.");
@@ -113,6 +163,7 @@ const teamRoster = database.collection("teamRoster");
 const inventory = database.collection("inventory");
 const reservations = database.collection("reservations");
 const venues = database.collection("venues");
+const gameState = database.collection("gameState");
 
 app.post(
   "/webhooks",
@@ -279,8 +330,8 @@ app.post("/create-checkout-session", async (req, res) => {
     metadata.productName === "1 year"
       ? 10
       : metadata.productName === "2 Year"
-      ? 20
-      : 0;
+        ? 20
+        : 0;
 
   let coupon;
 
@@ -773,7 +824,7 @@ async function run() {
                 });
               }
             }
-          } catch (error) {}
+          } catch (error) { }
         } else if (!req.query.onBoarding && req.query.accountId !== undefined) {
           ("req is in 2nd condition: seller is in refresh url");
 
@@ -1114,11 +1165,11 @@ async function run() {
           const role = req.query.role;
 
           `Role`,
-            {
-              meta: {
-                role,
-              },
-            };
+          {
+            meta: {
+              role,
+            },
+          };
 
           const cursor = users.find({
             role: { $in: ["athlete", "parents"] },
@@ -1500,7 +1551,7 @@ async function run() {
     });
 
     // delete user
-    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => {});
+    app.delete("/deleteUser/:userEmail", verifyJWT, async (req, res) => { });
 
     app.patch("/coach/assignTeam/:coachEmail", verifyJWT, async (req, res) => {
       const coachEmail = req.params.coachEmail;
@@ -2303,6 +2354,7 @@ async function run() {
                 isAllTeam: { $eq: ["$teamId", "all"] }, // Add a flag to identify "all" teamId
               },
             },
+
             {
               $lookup: {
                 from: "teams",
@@ -2342,6 +2394,42 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while fetching events." });
+      }
+    });
+
+
+    app.post("/gameState", async (req, res) => {
+      try {
+        const gameStateData = req.body;
+        const result = await gameState.insertOne(gameStateData);
+        res.json(result);
+      } catch (error) {
+        logger.error("Error creating game state:", error);
+        res.status(500).json({ error: "An error occurred while creating the game state." });
+      }
+    });
+
+
+    app.get("/gameState/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const result = await gameState.findOne({ _id: new ObjectId(id) });
+        res.json(result);
+      } catch (error) {
+        logger.error("Error fetching game state:", error);
+        res.status(500).json({ error: "An error occurred while fetching the game state." });
+      }
+    });
+
+    app.patch("/gameState/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const updatedData = req.body;
+        const result = await gameState.updateOne({ _id: new ObjectId(id) }, { $set: updatedData });
+        res.json(result);
+      } catch (error) {
+        logger.error("Error updating game state:", error);
+        res.status(500).json({ error: "An error occurred while updating the game state." });
       }
     });
 
