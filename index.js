@@ -58,7 +58,8 @@ const server = app.listen(port, () => {
 
 const io = new Server(server, {
   cors: {
-    origin: "http://localhost:3000",
+    // origin: "http://localhost:3000",
+    origin: "https://overtimeam.com",
     methods: ["GET", "POST"],
   },
 });
@@ -2509,7 +2510,7 @@ async function run() {
       }
     });
 
-    app.patch("/events/:id", verifyJWT, verifyAdmin, async (req, res) => {
+    app.patch("/events/:id", verifyJWT, async (req, res) => {
       try {
         const updatedData = req.body;
         const result = await events.updateOne(
@@ -2529,6 +2530,701 @@ async function run() {
         res
           .status(500)
           .json({ error: "An error occurred while updating the event." });
+      }
+    });
+
+
+
+    function calculateActionMetrics(data, actionType, totalGames) {
+      let totalActions = 0;
+
+
+      totalActions += data.filter((action) => action.play === actionType).length;
+
+      const averageActions = totalGames > 0 ? totalActions / totalGames : 0;
+
+      return { total: totalActions, average: averageActions };
+    }
+
+
+    function calculatePointMetrics(data, totalGames) {
+      const pointTypes = ["1 PT Make", "2 PT Make", "3 PT Make"];
+      const metrics = {};
+
+
+      pointTypes.forEach((pointType) => {
+        let totalPoints = 0;
+
+        totalPoints += data.filter((action) => action.play === pointType).length;
+
+        const averagePoints = totalGames > 0 ? totalPoints / totalGames : 0;
+        metrics[pointType] = {
+          total: totalPoints,
+          average: averagePoints,
+        };
+      });
+
+      return metrics;
+    }
+
+
+    // sample data
+    //   [
+    //     {
+    //         "_id": "6778dc80ad818ce3165e1e81",
+    //         "myRoster": [
+    //             {
+    //                 "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                 "athleteName": "Mohammad Jahid",
+    //                 "position": "",
+    //                 "scholarship": "Not Offered",
+    //                 "isStarter": true
+    //             },
+    //             {
+    //                 "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                 "athleteName": "test test",
+    //                 "position": "",
+    //                 "scholarship": "Not Offered",
+    //                 "isStarter": true
+    //             }
+    //         ],
+    //         "opponentRoster": [
+    //             {
+    //                 "athleteEmail": 1735973967895,
+    //                 "athleteName": "fg",
+    //                 "isStarter": true
+    //             }
+    //         ],
+    //         "gameSettings": {
+    //             "numberOfPeriods": 2,
+    //             "periodLength": 1,
+    //             "overtimePossible": false,
+    //             "overtimeLength": 0,
+    //             "foulsUntilDisqualify": 0
+    //         },
+    //         "myTeamName": {
+    //             "teamId": "6707f248eefbbbb7868b023a",
+    //             "teamName": "Abdur's Team"
+    //         },
+    //         "opponentTeamName": {
+    //             "teamId": 1735973586329,
+    //             "teamName": "test"
+    //         },
+    //         "eventId": "67401b75e0970d5f1d343c14",
+    //         "isCompleted": true,
+    //         "isMatchTied": true
+    //     },
+    //     {
+    //         "_id": "6778dd1390b5d76452352e59",
+    //         "myRoster": [
+    //             {
+    //                 "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                 "athleteName": "Mohammad Jahid",
+    //                 "position": "",
+    //                 "scholarship": "Not Offered",
+    //                 "isStarter": true
+    //             },
+    //             {
+    //                 "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                 "athleteName": "test test",
+    //                 "position": "",
+    //                 "scholarship": "Not Offered",
+    //                 "isStarter": true
+    //             }
+    //         ],
+    //         "opponentRoster": [
+    //             {
+    //                 "athleteEmail": 1735974124274,
+    //                 "athleteName": "sdf",
+    //                 "isStarter": true
+    //             },
+    //             {
+    //                 "athleteEmail": 1735974155231,
+    //                 "athleteName": "sdfsdfds",
+    //                 "isStarter": true
+    //             }
+    //         ],
+    //         "gameSettings": {
+    //             "numberOfPeriods": 2,
+    //             "periodLength": 1,
+    //             "overtimePossible": false,
+    //             "overtimeLength": 0,
+    //             "foulsUntilDisqualify": 0
+    //         },
+    //         "myTeamName": {
+    //             "teamId": "6707f248eefbbbb7868b023a",
+    //             "teamName": "Abdur's Team"
+    //         },
+    //         "opponentTeamName": {
+    //             "teamId": 1735974152711,
+    //             "teamName": "test"
+    //         },
+    //         "eventId": "67401b75e0970d5f1d343c14",
+    //         "data": [
+    //             {
+    //                 "id": 1735974512170,
+    //                 "action": "2 PT Make",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "2 PT Make",
+    //                 "time": "0:08 P1",
+    //                 "homeScore": 2,
+    //                 "visitorScore": 0,
+    //                 "score": 2,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             }
+    //         ],
+    //         "isCompleted": true,
+    //         "loser": {
+    //             "teamId": null,
+    //             "teamName": "test"
+    //         },
+    //         "winner": {
+    //             "teamId": "6707f248eefbbbb7868b023a",
+    //             "teamName": "Abdur's Team"
+    //         }
+    //     },
+    //     {
+    //         "_id": "67794a2085f0c73d33f75208",
+    //         "myRoster": [
+    //             {
+    //                 "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                 "athleteName": "Mohammad Jahid",
+    //                 "position": "",
+    //                 "scholarship": "Not Offered",
+    //                 "isStarter": true
+    //             },
+    //             {
+    //                 "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                 "athleteName": "test test",
+    //                 "position": "",
+    //                 "scholarship": "Not Offered",
+    //                 "isStarter": true
+    //             }
+    //         ],
+    //         "opponentRoster": [
+    //             {
+    //                 "athleteEmail": 1735974124274,
+    //                 "athleteName": "sdf",
+    //                 "isStarter": true
+    //             },
+    //             {
+    //                 "athleteEmail": 1735974155231,
+    //                 "athleteName": "sdfsdfds",
+    //                 "isStarter": true
+    //             }
+    //         ],
+    //         "gameSettings": {
+    //             "numberOfPeriods": 2,
+    //             "periodLength": 1,
+    //             "overtimePossible": false,
+    //             "overtimeLength": 0,
+    //             "foulsUntilDisqualify": 0
+    //         },
+    //         "myTeamName": {
+    //             "teamId": "6707f248eefbbbb7868b023a",
+    //             "teamName": "Abdur's Team"
+    //         },
+    //         "opponentTeamName": {
+    //             "teamId": 1735974152711,
+    //             "teamName": "test"
+    //         },
+    //         "eventId": "67401b75e0970d5f1d343c14",
+    //         "data": [
+    //             {
+    //                 "id": 1736006253249,
+    //                 "action": "2 PT Make",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "2 PT Make",
+    //                 "time": "0:59 P1",
+    //                 "homeScore": 2,
+    //                 "visitorScore": 0,
+    //                 "score": 2,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006258481,
+    //                 "action": "2 PT Miss",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "2 PT Miss",
+    //                 "time": "0:53 P1",
+    //                 "homeScore": 2,
+    //                 "visitorScore": 0,
+    //                 "score": 0,
+    //                 "athlete": {
+    //                     "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                     "athleteName": "test test",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006261162,
+    //                 "action": "3 PT Make",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "3 PT Make",
+    //                 "time": "0:51 P1",
+    //                 "homeScore": 5,
+    //                 "visitorScore": 0,
+    //                 "score": 3,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006263447,
+    //                 "action": "3 PT Miss",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "3 PT Miss",
+    //                 "time": "0:48 P1",
+    //                 "homeScore": 5,
+    //                 "visitorScore": 0,
+    //                 "score": 0,
+    //                 "athlete": {
+    //                     "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                     "athleteName": "test test",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006266066,
+    //                 "action": "1 PT Make",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "1 PT Make",
+    //                 "time": "0:46 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 0,
+    //                 "score": 1,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006270403,
+    //                 "action": "1 PT Miss",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "1 PT Miss",
+    //                 "time": "0:42 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 0,
+    //                 "score": 0,
+    //                 "athlete": {
+    //                     "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                     "athleteName": "test test",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006274675,
+    //                 "action": "2 PT Make",
+    //                 "side": "away",
+    //                 "teamId": null,
+    //                 "play": "2 PT Make",
+    //                 "time": "0:37 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": 2,
+    //                 "athlete": {
+    //                     "athleteEmail": 1735974124274,
+    //                     "athleteName": "sdf",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006287333,
+    //                 "action": "Rebound",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Rebound",
+    //                 "time": "0:25 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006289821,
+    //                 "action": "Assist",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Assist",
+    //                 "time": "0:22 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                     "athleteName": "test test",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006293325,
+    //                 "action": "Block",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Block",
+    //                 "time": "0:19 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006296038,
+    //                 "action": "Turnover",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Turnover",
+    //                 "time": "0:16 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006299182,
+    //                 "action": "Block",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Block",
+    //                 "time": "0:13 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006302071,
+    //                 "action": "Steal",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Steal",
+    //                 "time": "0:10 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006307919,
+    //                 "action": "Foul",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Foul",
+    //                 "time": "0:04 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "jollysolomon7@typingsquirrel.com",
+    //                     "athleteName": "test test",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             },
+    //             {
+    //                 "id": 1736006319025,
+    //                 "action": "Steal",
+    //                 "side": "home",
+    //                 "teamId": "6707f248eefbbbb7868b023a",
+    //                 "play": "Steal",
+    //                 "time": "0:07 P1",
+    //                 "homeScore": 6,
+    //                 "visitorScore": 2,
+    //                 "score": null,
+    //                 "athlete": {
+    //                     "athleteEmail": "upbeatyalow3@heywhatsoup.com",
+    //                     "athleteName": "Mohammad Jahid",
+    //                     "position": "",
+    //                     "scholarship": "Not Offered",
+    //                     "isStarter": true
+    //                 }
+    //             }
+    //         ],
+    //         "isCompleted": true,
+    //         "loser": {
+    //             "teamId": "6707f248eefbbbb7868b023a",
+    //             "teamName": "Abdur's Team"
+    //         },
+    //         "winner": {
+    //             "teamId": null,
+    //             "teamName": "test Team"
+    //         }
+    //     }
+    // ]
+
+    function calculateMyTeamScoreMetrics(data, type) {
+      let totalScore = 0;
+      let completedGames = 0;
+
+      data.forEach((game) => {
+        if (game.isCompleted && game[type] !== undefined) {
+          completedGames++;
+          totalScore += game[type];
+        }
+      });
+
+      const averageScore = completedGames > 0 ? totalScore / completedGames : 0;
+
+      return {
+        total: totalScore,
+        average: averageScore,
+      };
+    }
+
+
+    function processPlayerStats(data) {
+      console.log("data", data)
+      const playerStats = {};
+
+      data.forEach(entry => {
+        const { athlete, play, score } = entry;
+        const { athleteEmail, athleteName } = athlete;
+
+        if (!playerStats[athleteEmail]) {
+          playerStats[athleteEmail] = {
+            athleteName,
+            athleteEmail,
+            points: { total: 0, count: 0 },
+            onePoint: { total: 0, count: 0 },
+            twoPoints: { total: 0, count: 0 },
+            threePoints: { total: 0, count: 0 },
+            fouls: { total: 0, count: 0 },
+            rebounds: { total: 0, count: 0 },
+            assists: { total: 0, count: 0 },
+            steals: { total: 0, count: 0 },
+            blocks: { total: 0, count: 0 },
+            turnovers: { total: 0, count: 0 }
+          };
+        }
+
+        playerStats[athleteEmail].points.total += score;
+        playerStats[athleteEmail].points.count += 1;
+
+        if (play.includes("2 PT")) {
+          playerStats[athleteEmail].twoPoints.total += score;
+          playerStats[athleteEmail].twoPoints.count += 1;
+        } else if (play.includes("1 PT")) {
+          playerStats[athleteEmail].onePoint.total += score;
+          playerStats[athleteEmail].onePoint.count += 1;
+        } else if (play.includes("3 PT")) {
+          playerStats[athleteEmail].threePoints.total += score;
+          playerStats[athleteEmail].threePoints.count += 1;
+        } else if (play.includes("Foul")) {
+          playerStats[athleteEmail].fouls.total += 1;
+          playerStats[athleteEmail].fouls.count += 1;
+        } else if (play.includes("Rebound")) {
+          playerStats[athleteEmail].rebounds.total += 1;
+          playerStats[athleteEmail].rebounds.count += 1;
+        } else if (play.includes("Assist")) {
+          playerStats[athleteEmail].assists.total += 1;
+          playerStats[athleteEmail].assists.count += 1;
+        } else if (play.includes("Steal")) {
+          playerStats[athleteEmail].steals.total += 1;
+          playerStats[athleteEmail].steals.count += 1;
+        } else if (play.includes("Block")) {
+          playerStats[athleteEmail].blocks.total += 1;
+          playerStats[athleteEmail].blocks.count += 1;
+        } else if (play.includes("Turnover")) {
+          playerStats[athleteEmail].turnovers.total += 1;
+          playerStats[athleteEmail].turnovers.count += 1;
+        }
+      });
+
+      const result = Object.keys(playerStats).map(email => {
+        const stats = playerStats[email];
+        return {
+          athleteName: stats.athleteName,
+          athleteEmail: stats.athleteEmail,
+          points: { total: stats.points.total, avg: stats.points.total / stats.points.count || 0 },
+          onePoint: { total: stats.onePoint.total, avg: stats.onePoint.total / stats.onePoint.count || 0 },
+          twoPoints: { total: stats.twoPoints.total, avg: stats.twoPoints.total / stats.twoPoints.count || 0 },
+          threePoints: { total: stats.threePoints.total, avg: stats.threePoints.total / stats.threePoints.count || 0 },
+          fouls: { total: stats.fouls.total, avg: stats.fouls.total / stats.fouls.count || 0 },
+          rebounds: { total: stats.rebounds.total, avg: stats.rebounds.total / stats.rebounds.count || 0 },
+          turnovers: { total: stats.turnovers.total, avg: stats.turnovers.total / stats.turnovers.count || 0 },
+          steals: { total: stats.steals.total, avg: stats.steals.total / stats.steals.count || 0 },
+          blocks: { total: stats.blocks.total, avg: stats.blocks.total / stats.blocks.count || 0 },
+          assists: { total: stats.assists.total, avg: stats.assists.total / stats.assists.count || 0 }
+        };
+      });
+
+      return result;
+    }
+
+
+
+    app.get("/stats/:id", async (req, res) => {
+      try {
+        const id = req.params.id;
+        const myTeamResult = await gameState.find({ "myTeamName.teamId": id }).toArray();
+        // opponentTeamResult will be the data except myTeamResult
+        // const opponentTeamResult = await gameState.find({ "myTeamName.teamId": { $ne: id } }).toArray();
+
+        const myTeamData = myTeamResult.map((item) => {
+          return item?.data?.filter((dataItem) => dataItem.teamId === id).map((filteredItem) => filteredItem);
+        }).flat().filter(Boolean);
+
+        const opponentTeamData = myTeamResult.map((item) => {
+          return item?.data?.filter((dataItem) => dataItem.teamId !== id).map((filteredItem) => filteredItem);
+        }).flat().filter(Boolean);
+
+        // data for my team
+        const myTeamWins = myTeamResult.filter(item => item.winner?.teamId === id).length;
+        const myTeamLosses = myTeamResult.filter(item => item.loser?.teamId === id).length;
+        const { total: myTeamTotalPoints, average: myTeamAveragePoints } = calculateMyTeamScoreMetrics(myTeamResult, 'myTeamTotalScore');
+
+
+        const { total: myTeamTotalFouls, average: myTeamAverageFouls } = calculateActionMetrics(myTeamData, "Foul", myTeamResult.length);
+        const { total: myTeamTotalRebounds, average: myTeamAverageRebounds } = calculateActionMetrics(myTeamData, "Rebound", myTeamResult.length);
+        const { total: myTeamTotalAssists, average: myTeamAverageAssists } = calculateActionMetrics(myTeamData, "Assist", myTeamResult.length);
+        const { total: myTeamTotalSteals, average: myTeamAverageSteals } = calculateActionMetrics(myTeamData, "Steal", myTeamResult.length);
+        const { total: myTeamTotalBlocks, average: myTeamAverageBlocks } = calculateActionMetrics(myTeamData, "Block", myTeamResult.length);
+        const { total: myTeamTotalTurnovers, average: myTeamAverageTurnovers } = calculateActionMetrics(myTeamData, "Turnover", myTeamResult.length);
+
+        const pointMetrics = calculatePointMetrics(myTeamData, myTeamResult.length);
+
+        const myTeamTotalOnes = pointMetrics["1 PT Make"]?.total || 0;
+        const myTeamTotalTwos = pointMetrics["2 PT Make"]?.total || 0;
+        const myTeamTotalThrees = pointMetrics["3 PT Make"]?.total || 0;
+
+        const myTeamAverageOnes = pointMetrics["1 PT Make"]?.average || 0;
+        const myTeamAverageTwos = pointMetrics["2 PT Make"]?.average || 0;
+        const myTeamAverageThrees = pointMetrics["3 PT Make"]?.average || 0;
+
+        // data for opponent team
+
+        const { total: opponentTeamTotalPoints, average: opponentTeamAveragePoints } = calculateMyTeamScoreMetrics(myTeamResult, 'opponentTeamTotalScore');
+        const { total: opponentTeamTotalFouls, average: opponentTeamAverageFouls } = calculateActionMetrics(opponentTeamData, "Foul", myTeamResult.length);
+        const { total: opponentTeamTotalRebounds, average: opponentTeamAverageRebounds } = calculateActionMetrics(opponentTeamData, "Rebound", myTeamResult.length);
+        const { total: opponentTeamTotalAssists, average: opponentTeamAverageAssists } = calculateActionMetrics(opponentTeamData, "Assist", myTeamResult.length);
+        const { total: opponentTeamTotalSteals, average: opponentTeamAverageSteals } = calculateActionMetrics(opponentTeamData, "Steal", myTeamResult.length);
+        const { total: opponentTeamTotalBlocks, average: opponentTeamAverageBlocks } = calculateActionMetrics(opponentTeamData, "Block", myTeamResult.length);
+        const { total: opponentTeamTotalTurnovers, average: opponentTeamAverageTurnovers } = calculateActionMetrics(opponentTeamData, "Turnover", myTeamResult.length);
+        const opponentTeamPointMetrics = calculatePointMetrics(opponentTeamData, myTeamResult.length);
+
+        const opponentTeamTotalOnes = opponentTeamPointMetrics["1 PT Make"]?.total || 0;
+        const opponentTeamTotalTwos = opponentTeamPointMetrics["2 PT Make"]?.total || 0;
+        const opponentTeamTotalThrees = opponentTeamPointMetrics["3 PT Make"]?.total || 0;
+
+        const opponentTeamAverageOnes = opponentTeamPointMetrics["1 PT Make"]?.average || 0;
+        const opponentTeamAverageTwos = opponentTeamPointMetrics["2 PT Make"]?.average || 0;
+        const opponentTeamAverageThrees = opponentTeamPointMetrics["3 PT Make"]?.average || 0;
+
+
+        // individual player performance
+        const myTeamPlayersPerformance = processPlayerStats(myTeamData);
+
+        const myTeamStats = {
+          wins: myTeamWins,
+          losses: myTeamLosses,
+          stats: {
+            points: { total: myTeamTotalPoints, avg: myTeamAveragePoints.toFixed(2) },
+            onePoint: { total: myTeamTotalOnes, avg: myTeamAverageOnes.toFixed(2) },
+            twoPoints: { total: myTeamTotalTwos, avg: myTeamAverageTwos.toFixed(2) },
+            threePoints: { total: myTeamTotalThrees, avg: myTeamAverageThrees.toFixed(2) },
+            rebounds: { total: myTeamTotalRebounds, avg: myTeamAverageRebounds.toFixed(2) },
+            assists: { total: myTeamTotalAssists, avg: myTeamAverageAssists.toFixed(2) },
+            fouls: { total: myTeamTotalFouls, avg: myTeamAverageFouls.toFixed(2) },
+            blocks: { total: myTeamTotalBlocks, avg: myTeamAverageBlocks.toFixed(2) },
+            steals: { total: myTeamTotalSteals, avg: myTeamAverageSteals.toFixed(2) },
+            turnovers: { total: myTeamTotalTurnovers, avg: myTeamAverageTurnovers.toFixed(2) },
+          }
+        }
+
+        const opponentTeamStats = {
+          stats: {
+            points: { total: opponentTeamTotalPoints, avg: opponentTeamAveragePoints.toFixed(2) },
+            onePoint: { total: opponentTeamTotalOnes, avg: opponentTeamAverageOnes.toFixed(2) },
+            twoPoints: { total: opponentTeamTotalTwos, avg: opponentTeamAverageTwos.toFixed(2) },
+            threePoints: { total: opponentTeamTotalThrees, avg: opponentTeamAverageThrees.toFixed(2) },
+            rebounds: { total: opponentTeamTotalRebounds, avg: opponentTeamAverageRebounds.toFixed(2) },
+            assists: { total: opponentTeamTotalAssists, avg: opponentTeamAverageAssists.toFixed(2) },
+            fouls: { total: opponentTeamTotalFouls, avg: opponentTeamAverageFouls.toFixed(2) },
+            blocks: { total: opponentTeamTotalBlocks, avg: opponentTeamAverageBlocks.toFixed(2) },
+            steals: { total: opponentTeamTotalSteals, avg: opponentTeamAverageSteals.toFixed(2) },
+            turnovers: { total: opponentTeamTotalTurnovers, avg: opponentTeamAverageTurnovers.toFixed(2) },
+          }
+        }
+
+
+
+
+        // res.json(myTeamResult);
+        // res.json(myTeamPlayerPerformance);
+        // res.json(opponentTeamResult);
+        res.json({ myTeamStats, opponentTeamStats, myTeamPlayersPerformance });
+
+      } catch (error) {
+        logger.error("Error fetching stats:", error);
+        res
+          .status(500)
+          .json({ error: "An error occurred while fetching the stats." });
       }
     });
 
