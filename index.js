@@ -3038,8 +3038,7 @@ async function run() {
     }
 
 
-    function processPlayerStats(data) {
-      console.log("data", data)
+    function processPlayerStats(data, totalGames) {
       const playerStats = {};
 
       data.forEach(entry => {
@@ -3064,35 +3063,24 @@ async function run() {
         }
 
         playerStats[athleteEmail].points.total += score;
-        playerStats[athleteEmail].points.count += 1;
-
         if (play.includes("2 PT")) {
           playerStats[athleteEmail].twoPoints.total += score;
-          playerStats[athleteEmail].twoPoints.count += 1;
         } else if (play.includes("1 PT")) {
-          playerStats[athleteEmail].onePoint.total += score;
-          playerStats[athleteEmail].onePoint.count += 1;
+          playerStats[athleteEmail].onePoint.total += 1;
         } else if (play.includes("3 PT")) {
-          playerStats[athleteEmail].threePoints.total += score;
-          playerStats[athleteEmail].threePoints.count += 1;
+          playerStats[athleteEmail].threePoints.total += 1;
         } else if (play.includes("Foul")) {
           playerStats[athleteEmail].fouls.total += 1;
-          playerStats[athleteEmail].fouls.count += 1;
         } else if (play.includes("Rebound")) {
           playerStats[athleteEmail].rebounds.total += 1;
-          playerStats[athleteEmail].rebounds.count += 1;
         } else if (play.includes("Assist")) {
           playerStats[athleteEmail].assists.total += 1;
-          playerStats[athleteEmail].assists.count += 1;
         } else if (play.includes("Steal")) {
           playerStats[athleteEmail].steals.total += 1;
-          playerStats[athleteEmail].steals.count += 1;
         } else if (play.includes("Block")) {
           playerStats[athleteEmail].blocks.total += 1;
-          playerStats[athleteEmail].blocks.count += 1;
         } else if (play.includes("Turnover")) {
           playerStats[athleteEmail].turnovers.total += 1;
-          playerStats[athleteEmail].turnovers.count += 1;
         }
       });
 
@@ -3101,16 +3089,16 @@ async function run() {
         return {
           athleteName: stats.athleteName,
           athleteEmail: stats.athleteEmail,
-          points: { total: stats.points.total, avg: stats.points.total / stats.points.count || 0 },
-          onePoint: { total: stats.onePoint.total, avg: stats.onePoint.total / stats.onePoint.count || 0 },
-          twoPoints: { total: stats.twoPoints.total, avg: stats.twoPoints.total / stats.twoPoints.count || 0 },
-          threePoints: { total: stats.threePoints.total, avg: stats.threePoints.total / stats.threePoints.count || 0 },
-          fouls: { total: stats.fouls.total, avg: stats.fouls.total / stats.fouls.count || 0 },
-          rebounds: { total: stats.rebounds.total, avg: stats.rebounds.total / stats.rebounds.count || 0 },
-          turnovers: { total: stats.turnovers.total, avg: stats.turnovers.total / stats.turnovers.count || 0 },
-          steals: { total: stats.steals.total, avg: stats.steals.total / stats.steals.count || 0 },
-          blocks: { total: stats.blocks.total, avg: stats.blocks.total / stats.blocks.count || 0 },
-          assists: { total: stats.assists.total, avg: stats.assists.total / stats.assists.count || 0 }
+          points: { total: stats.points.total, avg: Math.floor((stats.points.total / totalGames || 0) * 100) / 100 },
+          onePoint: { total: stats.onePoint.total, avg: Math.floor((stats.onePoint.total / totalGames || 0) * 100) / 100 },
+          twoPoints: { total: stats.twoPoints.total, avg: Math.floor((stats.twoPoints.total / totalGames || 0) * 100) / 100 },
+          threePoints: { total: stats.threePoints.total, avg: Math.floor((stats.threePoints.total / totalGames || 0) * 100) / 100 },
+          fouls: { total: stats.fouls.total, avg: Math.floor((stats.fouls.total / totalGames || 0) * 100) / 100 },
+          rebounds: { total: stats.rebounds.total, avg: Math.floor((stats.rebounds.total / totalGames || 0) * 100) / 100 },
+          turnovers: { total: stats.turnovers.total, avg: Math.floor((stats.turnovers.total / totalGames || 0) * 100) / 100 },
+          steals: { total: stats.steals.total, avg: Math.floor((stats.steals.total / totalGames || 0) * 100) / 100 },
+          blocks: { total: stats.blocks.total, avg: Math.floor((stats.blocks.total / totalGames || 0) * 100) / 100 },
+          assists: { total: stats.assists.total, avg: Math.floor((stats.assists.total / totalGames || 0) * 100) / 100 }
         };
       });
 
@@ -3178,37 +3166,37 @@ async function run() {
 
 
         // individual player performance
-        const myTeamPlayersPerformance = processPlayerStats(myTeamData);
+        const myTeamPlayersPerformance = processPlayerStats(myTeamData, myTeamResult.length);
 
         const myTeamStats = {
           wins: myTeamWins,
           losses: myTeamLosses,
           stats: {
-            points: { total: myTeamTotalPoints, avg: myTeamAveragePoints.toFixed(2) },
-            onePoint: { total: myTeamTotalOnes, avg: myTeamAverageOnes.toFixed(2) },
-            twoPoints: { total: myTeamTotalTwos, avg: myTeamAverageTwos.toFixed(2) },
-            threePoints: { total: myTeamTotalThrees, avg: myTeamAverageThrees.toFixed(2) },
-            rebounds: { total: myTeamTotalRebounds, avg: myTeamAverageRebounds.toFixed(2) },
-            assists: { total: myTeamTotalAssists, avg: myTeamAverageAssists.toFixed(2) },
-            fouls: { total: myTeamTotalFouls, avg: myTeamAverageFouls.toFixed(2) },
-            blocks: { total: myTeamTotalBlocks, avg: myTeamAverageBlocks.toFixed(2) },
-            steals: { total: myTeamTotalSteals, avg: myTeamAverageSteals.toFixed(2) },
-            turnovers: { total: myTeamTotalTurnovers, avg: myTeamAverageTurnovers.toFixed(2) },
+            points: { total: myTeamTotalPoints, avg: Math.floor(myTeamAveragePoints) },
+            onePoint: { total: myTeamTotalOnes, avg: Math.floor(myTeamAverageOnes) },
+            twoPoints: { total: myTeamTotalTwos, avg: Math.floor(myTeamAverageTwos) },
+            threePoints: { total: myTeamTotalThrees, avg: Math.floor(myTeamAverageThrees) },
+            rebounds: { total: myTeamTotalRebounds, avg: Math.floor(myTeamAverageRebounds) },
+            assists: { total: myTeamTotalAssists, avg: Math.floor(myTeamAverageAssists) },
+            fouls: { total: myTeamTotalFouls, avg: Math.floor(myTeamAverageFouls) },
+            blocks: { total: myTeamTotalBlocks, avg: Math.floor(myTeamAverageBlocks) },
+            steals: { total: myTeamTotalSteals, avg: Math.floor(myTeamAverageSteals) },
+            turnovers: { total: myTeamTotalTurnovers, avg: Math.floor(myTeamAverageTurnovers) },
           }
         }
 
         const opponentTeamStats = {
           stats: {
-            points: { total: opponentTeamTotalPoints, avg: opponentTeamAveragePoints.toFixed(2) },
-            onePoint: { total: opponentTeamTotalOnes, avg: opponentTeamAverageOnes.toFixed(2) },
-            twoPoints: { total: opponentTeamTotalTwos, avg: opponentTeamAverageTwos.toFixed(2) },
-            threePoints: { total: opponentTeamTotalThrees, avg: opponentTeamAverageThrees.toFixed(2) },
-            rebounds: { total: opponentTeamTotalRebounds, avg: opponentTeamAverageRebounds.toFixed(2) },
-            assists: { total: opponentTeamTotalAssists, avg: opponentTeamAverageAssists.toFixed(2) },
-            fouls: { total: opponentTeamTotalFouls, avg: opponentTeamAverageFouls.toFixed(2) },
-            blocks: { total: opponentTeamTotalBlocks, avg: opponentTeamAverageBlocks.toFixed(2) },
-            steals: { total: opponentTeamTotalSteals, avg: opponentTeamAverageSteals.toFixed(2) },
-            turnovers: { total: opponentTeamTotalTurnovers, avg: opponentTeamAverageTurnovers.toFixed(2) },
+            points: { total: opponentTeamTotalPoints, avg: Math.floor(opponentTeamAveragePoints) },
+            onePoint: { total: opponentTeamTotalOnes, avg: Math.floor(opponentTeamAverageOnes) },
+            twoPoints: { total: opponentTeamTotalTwos, avg: Math.floor(opponentTeamAverageTwos) },
+            threePoints: { total: opponentTeamTotalThrees, avg: Math.floor(opponentTeamAverageThrees) },
+            rebounds: { total: opponentTeamTotalRebounds, avg: Math.floor(opponentTeamAverageRebounds) },
+            assists: { total: opponentTeamTotalAssists, avg: Math.floor(opponentTeamAverageAssists) },
+            fouls: { total: opponentTeamTotalFouls, avg: Math.floor(opponentTeamAverageFouls) },
+            blocks: { total: opponentTeamTotalBlocks, avg: Math.floor(opponentTeamAverageBlocks) },
+            steals: { total: opponentTeamTotalSteals, avg: Math.floor(opponentTeamAverageSteals) },
+            turnovers: { total: opponentTeamTotalTurnovers, avg: Math.floor(opponentTeamAverageTurnovers) },
           }
         }
 
